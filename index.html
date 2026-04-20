@@ -473,6 +473,7 @@ async function pollForChanges(){
     const data=await r.json();
     _applyMobileFilter(data);
     if(currentBoard && !boards[currentBoard]){const bk=Object.keys(boards);currentBoard=bk[0]||'';}
+    currentStatus=''; // Filter zurücksetzen damit alle Änderungen sichtbar sind
     fileLastModified=meta.modifiedTime;
     if(currentTaskId){const t=findTaskById(currentTaskId);if(t)renderDetail(t);else closeDetail();}
     else renderList();
