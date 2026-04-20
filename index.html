@@ -354,15 +354,55 @@ function startPolling(){
 async function saveFile(){
   if(!fileId||!gdriveToken)return;
   if(!(await ensureToken()))return;
-  const obj={_statuses:statuses,...boards};
-  const content=JSON.stringify(obj,null,2);
   setSaveInd('saving','Speichere…');
   try{
-    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',
+    // ── Konflikt-Check: hat der Desktop seit unserem letzten Stand geschrieben? ──
+    try{
+      const mr=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?fields=modifiedTime&_='+Date.now(),
+        {headers:{Authorization:'Bearer '+gdriveToken},cache:'no-store'});
+      if(mr.ok){
+        const meta=await mr.json();
+        if(fileLastModified&&meta.modifiedTime&&meta.modifiedTime!==fileLastModified){
+          // Remote ist neuer → laden, dann nur die aktuell offene Task übernehmen
+          const fr=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media&_='+Date.now(),
+            {headers:{Authorization:'Bearer '+gdriveToken,'Cache-Control':'no-cache'},cache:'no-store'});
+          if(fr.ok){
+            const remote=await fr.json();
+            const remoteStatuses=Array.isArray(remote._statuses)?remote._statuses:statuses;
+            const remoteBoards={};
+            for(const[k,v]of Object.entries(remote)){if(k!=='_statuses'&&Array.isArray(v))remoteBoards[k]=v;}
+            // Lokale Änderung der gerade offenen Task in die Remote-Version mergen
+            if(currentTaskId){
+              const localTask=findTaskById(currentTaskId);
+              if(localTask){
+                let placed=false;
+                for(const bn of Object.keys(remoteBoards)){
+                  const idx=remoteBoards[bn].findIndex(t=>t&&t.id===currentTaskId);
+                  if(idx>=0){remoteBoards[bn][idx]=localTask;placed=true;break;}
+                }
+                // Falls Task remote noch nicht existiert (neu angelegt) → in passendes Board einfügen
+                if(!placed){
+                  const target=currentBoard&&remoteBoards[currentBoard]?currentBoard:Object.keys(remoteBoards)[0];
+                  if(target){if(!remoteBoards[target])remoteBoards[target]=[];remoteBoards[target].push(localTask);}
+                }
+              }
+            }
+            statuses=remoteStatuses;
+            boards=remoteBoards;
+          }
+        }
+      }
+    }catch(e){/* Konflikt-Check best-effort */}
+    const obj={_statuses:statuses,...boards};
+    const content=JSON.stringify(obj,null,2);
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media&fields=modifiedTime',
       {method:'PATCH',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},body:content});
     if(!r.ok)throw new Error('HTTP '+r.status);
+    try{const rm=await r.json();if(rm&&rm.modifiedTime)fileLastModified=rm.modifiedTime;}catch(e){}
     setSaveInd('saved','✓ Gespeichert');
     dirty=false;
+    // Detail neu rendern, damit zwischenzeitliche Remote-Änderungen sichtbar werden
+    if(currentTaskId){const t=findTaskById(currentTaskId);if(t)renderDetail(t);}
   }catch(e){setSaveInd('error','✗ '+e.message);}
 }
 function scheduleSave(){
