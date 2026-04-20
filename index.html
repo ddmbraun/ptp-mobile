@@ -36,6 +36,11 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .board-chip{background:var(--bg3);border:2px solid var(--border);color:var(--text);padding:10px 16px;border-radius:22px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;min-height:42px;transition:all .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
 .board-chip:active{transform:scale(.96)}
 .board-chip.active{background:var(--accent);border-color:var(--accent);color:white;font-weight:600;box-shadow:0 2px 8px rgba(106,138,255,.3)}
+/* ── STATUS-LEISTE ── */
+.status-section{background:var(--bg);border-bottom:1px solid var(--border);padding:8px 12px 10px}
+.status-chip{background:var(--bg3);border:2px solid var(--border);color:var(--text2);padding:7px 13px;border-radius:18px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;min-height:36px;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.status-chip:active{transform:scale(.96)}
+.status-chip.active{background:var(--bg2);border-color:var(--orange);color:var(--orange);font-weight:600}
 .search-bar{padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--border)}
 .search-bar input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:15px}
 .task-list{flex:1;overflow-y:auto;padding:8px 10px 80px;-webkit-overflow-scrolling:touch}
@@ -166,6 +171,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
     <div class="board-section-label" id="boardLabel">Board wählen</div>
     <div class="board-bar" id="boardBar"></div>
   </div>
+  <div class="status-section" id="statusSection" style="display:none">
+    <div class="board-bar" id="statusBar"></div>
+  </div>
   <div class="search-bar">
     <input type="search" id="searchInput" placeholder="🔍 Suche Titel, Kostenstelle, Adresse…" oninput="renderList()">
   </div>
@@ -235,6 +243,7 @@ let hiddenBoards={};      // Desktop-only Boards: wir fassen sie nie an, schreib
 let mobileWhitelist=[];   // Aus _mobileBoards; leer = keine Einschränkung
 let statuses=[];
 let currentBoard='';
+let currentStatus=''; // leer = alle Spalten
 let currentTaskId=null;
 let saveTimer=null;
 let dirty=false;
@@ -627,17 +636,44 @@ function renderBoardBar(){
     else{lbl.textContent='Aktuelles Board: '+currentBoard+'  ·  '+names.length+' verfügbar';}
   }
 }
-function switchBoard(n){currentBoard=n;renderList();}
+function switchBoard(n){currentBoard=n;currentStatus='';renderList();}
+function switchStatus(s){currentStatus=(currentStatus===s?'':s);renderList();}
+function renderStatusBar(){
+  const sec=document.getElementById('statusSection');
+  const bar=document.getElementById('statusBar');
+  if(!sec||!bar)return;
+  const tasks=boards[currentBoard]||[];
+  if(!statuses.length){sec.style.display='none';return;}
+  sec.style.display='';
+  // Zähle Tasks pro Status
+  const counts={};
+  tasks.forEach(t=>{const s=t.status||'';counts[s]=(counts[s]||0)+1;});
+  const allCount=tasks.length;
+  bar.innerHTML='<button class="status-chip'+(currentStatus===''?' active':'')+'" onclick="switchStatus(\'\')">'
+    +'Alle <span style="opacity:.7;font-size:11px">('+allCount+')</span></button>'
+    +statuses.map(s=>{
+      const cnt=counts[s]||0;
+      return '<button class="status-chip'+(currentStatus===s?' active':'')+'" onclick="switchStatus(\''+escAttr(s)+'\')">'
+        +esc(s)+' <span style="opacity:.7;font-size:11px">('+cnt+')</span></button>';
+    }).join('');
+}
 function renderList(){
   renderBoardBar();
+  renderStatusBar();
   const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
   const list=document.getElementById('taskList');
   const tasks=boards[currentBoard]||[];
-  const filtered=q?tasks.filter(t=>{
+  // Status-Filter
+  let filtered=currentStatus?tasks.filter(t=>(t.status||'')===currentStatus):tasks;
+  // Suche
+  if(q)filtered=filtered.filter(t=>{
     const hay=[t.title,t.adresse,t.hausverwaltung,t.schadensbild,(t.tags||[]).join(' '),(t.kontakte||[]).map(k=>k.name).join(' ')].join(' ').toLowerCase();
     return hay.includes(q);
-  }):tasks;
-  if(!filtered.length){list.innerHTML='<div class="empty">'+(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.')+'</div>';return;}
+  });
+  if(!filtered.length){
+    const hint=currentStatus?'Keine Tasks in „'+esc(currentStatus)+'"':(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.');
+    list.innerHTML='<div class="empty">'+hint+'</div>';return;
+  }
   const timerState=_loadTimerState();
   const runningTaskId=timerState?timerState.taskId:null;
   list.innerHTML=filtered.map(t=>{
@@ -648,13 +684,12 @@ function renderList(){
     return '<div class="task-card" onclick="openDetail(\''+escAttr(t.id)+'\')">'
       +'<div class="task-card-title">'+esc(t.title||'(ohne Titel)')+'</div>'
       +'<div class="task-card-meta">'
-      +(status?'<span class="badge status">'+esc(status)+'</span>':'')
+      +(status&&!currentStatus?'<span class="badge status">'+esc(status)+'</span>':'')
       +'<span class="badge ampel-'+ampel+'">●</span>'
       +(ausf?'<span>📅 '+esc(ausf)+'</span>':'')
       +(isRunning?'<span class="task-timer-badge" style="color:var(--orange);font-size:12px;font-weight:600;margin-left:auto">⏱ '+formatTimerFor(t.id)+'</span>':'')
       +'</div></div>';
   }).join('');
-  // Tick-Loop für laufende Stoppuhr in der Kartenliste
   if(runningTaskId)_startListTickLoop();else _stopListTickLoop();
 }
 function formatDate(iso){try{const d=new Date(iso);if(isNaN(d))return iso;return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return iso;}}
