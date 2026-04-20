@@ -759,6 +759,11 @@ function renderDetail(t){
       +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
       +'<div class="field" style="margin-top:8px"><label>Drive-Ordner für Fotos</label><input type="text" value="'+escAttr(t.gdrive||'')+'" placeholder="Google Drive-Ordner-Link" oninput="updateField(\'gdrive\',this.value)"></div>'
     +'</div></div>'
+    // ── ABSCHLUSSAKTE ──
+    +'<div class="sect'+oc('Abschluss')+'" data-sect="Abschluss"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📁 Abschlussakte</div><div class="sect-body">'
+      +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Erstellt einen Unterordner „Abschlussakte" im Drive-Foto-Ordner mit Auftragsakte.txt und Fotoliste.</div>'
+      +'<button class="inline-btn primary" style="width:100%" id="abschlussBtn" onclick="createAbschlussakteMobile()">📁 Abschlussakte erstellen</button>'
+    +'</div></div>'
     // ── LÖSCHEN ──
     +'<div class="sect'+oc('Löschen')+'" data-sect="Löschen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">⚠ Task löschen</div><div class="sect-body">'
       +'<button class="inline-btn danger" style="width:100%" onclick="deleteTask()">🗑 Task löschen</button>'
@@ -1241,6 +1246,85 @@ async function removeFoto(i){
   _mOpenSections['Fotos']=true;
   forceSave();
   renderDetail(t);
+}
+
+// ══ ABSCHLUSSAKTE ══
+function _extractFolderIdMob(url){
+  if(!url)return null;
+  const m=String(url).match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if(m)return m[1];
+  const m2=String(url).trim().match(/^([a-zA-Z0-9_-]{20,})$/);
+  return m2?m2[1]:null;
+}
+async function _mobDriveCreateFolder(name,parentId){
+  const r=await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]})
+  });
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return(await r.json()).id;
+}
+async function _mobDriveCreateTextFile(name,content,parentId){
+  const meta={name,mimeType:'text/plain',parents:[parentId]};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+  form.append('file',new Blob([content],{type:'text/plain;charset=utf-8'}));
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',headers:{Authorization:'Bearer '+gdriveToken},body:form
+  });
+  if(!r.ok)throw new Error('HTTP '+r.status);
+}
+async function createAbschlussakteMobile(){
+  const t=currentTask();if(!t)return;
+  const folderId=_extractFolderIdMob(t.gdrive);
+  if(!folderId){toast('Zuerst Drive-Ordner im Task eintragen','error');return;}
+  if(!(await ensureToken())){toast('Nicht angemeldet','error');return;}
+  const btn=document.getElementById('abschlussBtn');
+  if(btn){btn.textContent='⏳ Erstelle…';btn.disabled=true;}
+  try{
+    const now=new Date().toLocaleString('de-DE');
+    const zeitMin=(t.zeitEntries||[]).reduce((s,z)=>{try{const[vh,vm]=z.von.split(':').map(Number);const[bh,bm]=z.bis.split(':').map(Number);const d=(bh*60+bm)-(vh*60+vm);return s+(d>0?d:0);}catch(e){return s;}},0);
+    const zeitH=Math.floor(zeitMin/60),zeitM=zeitMin%60;
+    let txt='ABSCHLUSSAKTE\n=============\nErstellt: '+now+'\n\n';
+    txt+='AUFTRAG\n-------\n';
+    txt+='Titel:           '+( t.title||'')+'\n';
+    if(t.adresse)txt+='Adresse:         '+t.adresse+'\n';
+    if(t.hausverwaltung)txt+='Hausverwaltung:  '+t.hausverwaltung+'\n';
+    if(t.status)txt+='Status:          '+t.status+'\n';
+    if(t.ausführungsdatum)txt+='Ausführungsdatum:'+t.ausführungsdatum+'\n';
+    if(t.nas)txt+='NAS-Pfad:        '+t.nas+'\n';
+    if(t.gdrive)txt+='Drive-Ordner:    '+t.gdrive+'\n';
+    if(t.schadensbild)txt+='\nSCHADENSBILD\n------------\n'+t.schadensbild+'\n';
+    if(t.desc)txt+='\nNOTIZ\n-----\n'+t.desc+'\n';
+    if((t.kontakte||[]).length){
+      txt+='\nKONTAKTE\n--------\n';
+      t.kontakte.forEach(k=>{txt+=(k.rolle||'')+(k.name?' | '+k.name:'')+(k.tel?' | Tel: '+k.tel:'')+(k.email?' | '+k.email:'')+'\n';});
+    }
+    if((t.zeitEntries||[]).length){
+      txt+='\nZEITERFASSUNG\n-------------\n';
+      t.zeitEntries.forEach(z=>{txt+=(z.date||'')+'  '+(z.von||'')+'–'+(z.bis||'')+'  '+(z.beschreibung||'')+'\n';});
+      txt+='Gesamt: '+zeitH+'h '+zeitM+'min\n';
+    }
+    if((t.ausserhausTermine||[]).length){
+      txt+='\nAUSSER-HAUS-TERMINE\n-------------------\n';
+      t.ausserhausTermine.forEach(tm=>{txt+=(tm.date||'')+'  '+(tm.von||'')+'–'+(tm.bis||'')+'  '+(tm.beschreibung||'')+'\n';});
+    }
+    if((t.notizVerlauf||[]).length){
+      txt+='\nNOTIZVERLAUF\n------------\n';
+      t.notizVerlauf.forEach(n=>{txt+=(n.ts||'')+': '+(n.text||'')+'\n';});
+    }
+    if((t.fotos||[]).length){
+      txt+='\nFOTOS\n-----\n';
+      t.fotos.forEach((f,i)=>{txt+=(i+1)+'. '+(f.name||'Foto')+(f.caption?' — '+f.caption:'')+'\n';});
+    }
+    const subId=await _mobDriveCreateFolder('Abschlussakte',folderId);
+    await _mobDriveCreateTextFile('Auftragsakte.txt',txt,subId);
+    if(btn){btn.textContent='✓ Erstellt!';setTimeout(()=>{btn.textContent='📁 Abschlussakte erstellen';btn.disabled=false;},3000);}
+    toast('✓ Abschlussakte erstellt','success');
+  }catch(e){
+    if(btn){btn.textContent='📁 Abschlussakte erstellen';btn.disabled=false;}
+    toast('Fehler: '+e.message,'error');
+  }
 }
 
 // ══ TASK ANLEGEN / LÖSCHEN ══
