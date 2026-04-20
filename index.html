@@ -86,6 +86,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 /* ── TIMER ── */
 .timer-bar{display:flex;gap:8px;align-items:center;padding:12px 14px;background:linear-gradient(135deg,rgba(106,138,255,.15),rgba(106,138,255,.05));border:1px solid var(--accent);border-radius:10px;margin-bottom:10px}
 .timer-bar.running{background:linear-gradient(135deg,rgba(251,146,60,.15),rgba(251,146,60,.05));border-color:var(--orange)}
+.timer-bar.top{position:sticky;top:0;z-index:5;margin:0 0 12px;border-width:2px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .timer-display{flex:1;font-family:'SF Mono',Consolas,monospace;font-size:20px;font-weight:600;letter-spacing:2px}
 .timer-display.running{color:var(--orange)}
 .timer-btn{padding:10px 18px;border-radius:8px;font-weight:600;border:none;cursor:pointer;font-size:14px;min-height:42px}
@@ -551,6 +552,11 @@ function renderDetail(t){
   const fotos=t.fotos||[];
 
   body.innerHTML=''
+    // ── TIMER-BAR (ganz oben, immer sichtbar) ──
+    +'<div id="timerBar" class="timer-bar top'+(isTimerRunningForTask(t.id)?' running':'')+'">'
+      +'<div id="timerDisplay" class="timer-display'+(isTimerRunningForTask(t.id)?' running':'')+'">'+formatTimerFor(t.id)+'</div>'
+      +'<button id="timerBtn" class="timer-btn '+(isTimerRunningForTask(t.id)?'stop':'start')+'" onclick="toggleMobileTimer(\''+escAttr(t.id)+'\')">'+(isTimerRunningForTask(t.id)?'⏹ Stopp':'▶ Start')+'</button>'
+    +'</div>'
     // ── STAMMDATEN ──
     +'<div class="sect open"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">Stammdaten</div><div class="sect-body">'
       +'<div class="field"><label>Titel</label><input type="text" value="'+escAttr(t.title||'')+'" oninput="updateField(\'title\',this.value);document.getElementById(\'detailTitle\').textContent=this.value||\'(ohne Titel)\'"></div>'
@@ -576,10 +582,6 @@ function renderDetail(t){
     +'</div></div>'
     // ── ZEITERFASSUNG ──
     +'<div class="sect open"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">⏱ Zeiterfassung ('+zeiten.length+')</div><div class="sect-body">'
-      +'<div id="timerBar" class="timer-bar'+(isTimerRunningForTask(t.id)?' running':'')+'">'
-        +'<div id="timerDisplay" class="timer-display'+(isTimerRunningForTask(t.id)?' running':'')+'">'+formatTimerFor(t.id)+'</div>'
-        +'<button id="timerBtn" class="timer-btn '+(isTimerRunningForTask(t.id)?'stop':'start')+'" onclick="toggleMobileTimer(\''+escAttr(t.id)+'\')">'+(isTimerRunningForTask(t.id)?'⏹ Stopp':'▶ Start')+'</button>'
-      +'</div>'
       +'<div id="zeitenList">'+renderZeitenRows(zeiten)+'</div>'
       +'<button class="add-btn" onclick="addZeit()">+ Zeit manuell hinzufügen</button>'
       +'<div id="zeitGesamt" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;text-align:center;font-weight:600">'+renderZeitGesamtText(zeiten)+'</div>'
