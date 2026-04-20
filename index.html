@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PTP Mobile">
+<title>PTP Mobile</title>
+<style>
+:root{--bg:#0f0f1a;--bg2:#1a1a2e;--bg3:#242438;--text:#e8e8f0;--text2:#9090a8;--accent:#6a8aff;--accent2:#8aa0ff;--green:#4ade80;--orange:#fb923c;--red:#f87171;--border:#333350;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;height:100%;overflow:hidden}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+.screen.hidden{display:none}
+/* ── HEADER ── */
+.hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);min-height:56px;position:sticky;top:0;z-index:10}
+.hdr-title{flex:1;font-weight:600;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-btn{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:14px;cursor:pointer;min-width:44px;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
+.hdr-btn.primary{background:var(--accent);border-color:var(--accent);color:white}
+.hdr-btn.icon{padding:8px 10px;font-size:18px}
+/* ── LOGIN ── */
+#loginScreen{justify-content:center;align-items:center;padding:24px;text-align:center}
+#loginScreen h1{font-size:28px;margin:0 0 12px}
+#loginScreen p{color:var(--text2);margin:0 0 32px;max-width:320px;line-height:1.5}
+#loginBtn{background:var(--accent);color:white;border:none;padding:16px 28px;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer}
+#loginBtn:active{opacity:.85}
+.login-status{margin-top:16px;color:var(--text2);font-size:13px}
+/* ── LIST ── */
+.board-bar{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;background:var(--bg2);border-bottom:1px solid var(--border);scrollbar-width:none}
+.board-bar::-webkit-scrollbar{display:none}
+.board-chip{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:20px;font-size:13px;cursor:pointer;white-space:nowrap;min-height:38px}
+.board-chip.active{background:var(--accent);border-color:var(--accent);color:white}
+.search-bar{padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--border)}
+.search-bar input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:15px}
+.task-list{flex:1;overflow-y:auto;padding:8px 10px 80px;-webkit-overflow-scrolling:touch}
+.task-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
+.task-card:active{background:var(--bg3)}
+.task-card-title{font-weight:600;font-size:15px;margin:0 0 4px;line-height:1.3}
+.task-card-meta{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--text2);flex-wrap:wrap}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:var(--bg3);border:1px solid var(--border)}
+.badge.status{background:rgba(106,138,255,.15);border-color:var(--accent);color:var(--accent2)}
+.badge.ampel-grün{background:rgba(74,222,128,.15);border-color:var(--green);color:var(--green)}
+.badge.ampel-orange{background:rgba(251,146,60,.15);border-color:var(--orange);color:var(--orange)}
+.badge.ampel-rot{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.fab{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:28px;background:var(--accent);color:white;border:none;font-size:28px;line-height:1;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:20}
+.fab:active{transform:scale(.95)}
+.empty{text-align:center;color:var(--text2);padding:40px 20px;font-size:14px}
+/* ── DETAIL ── */
+.detail-body{flex:1;overflow-y:auto;padding:12px 14px 100px;-webkit-overflow-scrolling:touch}
+.sect{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.sect-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;user-select:none;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)}
+.sect-head::after{content:'▸';transition:transform .15s;font-size:12px}
+.sect.open .sect-head::after{transform:rotate(90deg)}
+.sect-body{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
+.sect.open .sect-body{display:block}
+.sect-body-always{padding:14px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.field input,.field textarea,.field select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:15px;font-family:inherit}
+.field textarea{min-height:80px;resize:vertical}
+.field-row{display:flex;gap:8px;align-items:flex-end}
+.field-row .field{flex:1;margin-bottom:0}
+.inline-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;min-height:42px}
+.inline-btn.primary{background:var(--accent);border-color:var(--accent);color:white}
+.inline-btn.danger{color:var(--red);border-color:var(--red)}
+.termin-row,.zeit-row{display:grid;grid-template-columns:1fr 68px 68px 1fr 36px;gap:6px;margin-bottom:6px;align-items:center}
+.termin-row input,.zeit-row input{padding:8px;font-size:13px}
+.rm-btn{background:transparent;border:1px solid var(--red);color:var(--red);border-radius:6px;height:38px;cursor:pointer;font-size:14px}
+.add-btn{width:100%;background:transparent;border:1px dashed var(--border);color:var(--accent2);padding:10px;border-radius:8px;margin-top:6px;cursor:pointer;font-size:14px}
+.kontakt-entry{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px}
+.kontakt-entry-head{display:flex;gap:6px;margin-bottom:8px}
+.kontakt-entry-head select{flex:1;padding:8px;font-size:13px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px}
+.call-link{background:var(--green);color:white;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;display:inline-flex;align-items:center;gap:4px;min-height:42px;white-space:nowrap}
+.call-link.disabled{background:var(--bg3);color:var(--text2);pointer-events:none}
+.nav-link{background:var(--accent);color:white;text-decoration:none;padding:10px 14px;border-radius:8px;font-size:14px;display:inline-flex;align-items:center;gap:4px;min-height:42px;white-space:nowrap}
+.save-indicator{font-size:12px;color:var(--text2);min-width:80px;text-align:right}
+.save-indicator.saving{color:var(--orange)}
+.save-indicator.saved{color:var(--green)}
+.save-indicator.error{color:var(--red)}
+/* ── TIMER ── */
+.timer-bar{display:flex;gap:8px;align-items:center;padding:12px 14px;background:linear-gradient(135deg,rgba(106,138,255,.15),rgba(106,138,255,.05));border:1px solid var(--accent);border-radius:10px;margin-bottom:10px}
+.timer-bar.running{background:linear-gradient(135deg,rgba(251,146,60,.15),rgba(251,146,60,.05));border-color:var(--orange)}
+.timer-display{flex:1;font-family:'SF Mono',Consolas,monospace;font-size:20px;font-weight:600;letter-spacing:2px}
+.timer-display.running{color:var(--orange)}
+.timer-btn{padding:10px 18px;border-radius:8px;font-weight:600;border:none;cursor:pointer;font-size:14px;min-height:42px}
+.timer-btn.start{background:var(--accent);color:white}
+.timer-btn.stop{background:var(--orange);color:white}
+/* ── FOTOS ── */
+.foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.foto-thumb{position:relative;aspect-ratio:1;background:var(--bg3);border-radius:6px;overflow:hidden;cursor:pointer;border:1px solid var(--border)}
+.foto-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.foto-thumb .del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:white;border:none;width:22px;height:22px;border-radius:11px;font-size:12px;cursor:pointer}
+.foto-placeholder{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text2)}
+/* ── NOTIZ VERLAUF ── */
+.notiz-entry{background:var(--bg3);border-left:3px solid var(--accent);padding:8px 10px;margin-bottom:6px;border-radius:4px;font-size:13px}
+.notiz-entry .ts{display:block;color:var(--text2);font-size:11px;margin-bottom:2px}
+/* ── TOAST ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--text);padding:12px 20px;border-radius:10px;border:1px solid var(--border);z-index:100;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN-SCREEN ══ -->
+<div id="loginScreen" class="screen">
+  <h1>PTP Mobile</h1>
+  <p>Verbindung zu Google Drive einrichten. Die App nutzt dieselbe <code>workboard.json</code> wie PTP am Desktop.</p>
+  <button id="loginBtn" onclick="gdriveLogin()">🔐 Mit Google anmelden</button>
+  <div class="login-status" id="loginStatus"></div>
+</div>
+
+<!-- ══ LISTE-SCREEN ══ -->
+<div id="listScreen" class="screen hidden">
+  <div class="hdr">
+    <div class="hdr-title">PTP Mobile</div>
+    <button class="hdr-btn icon" onclick="refreshData()" title="Neu laden">🔄</button>
+    <button class="hdr-btn icon" onclick="openSettings()" title="Einstellungen">⚙️</button>
+  </div>
+  <div class="board-bar" id="boardBar"></div>
+  <div class="search-bar">
+    <input type="search" id="searchInput" placeholder="🔍 Suche Titel, Kostenstelle, Adresse…" oninput="renderList()">
+  </div>
+  <div class="task-list" id="taskList"></div>
+  <button class="fab" onclick="newTask()">+</button>
+</div>
+
+<!-- ══ DETAIL-SCREEN ══ -->
+<div id="detailScreen" class="screen hidden">
+  <div class="hdr">
+    <button class="hdr-btn icon" onclick="closeDetail()">←</button>
+    <div class="hdr-title" id="detailTitle">Task</div>
+    <span class="save-indicator" id="saveInd"></span>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<!-- ══ EINSTELLUNGEN ══ -->
+<div id="settingsScreen" class="screen hidden">
+  <div class="hdr">
+    <button class="hdr-btn icon" onclick="closeSettings()">←</button>
+    <div class="hdr-title">Einstellungen</div>
+  </div>
+  <div class="detail-body">
+    <div class="sect open">
+      <div class="sect-head" onclick="this.parentElement.classList.toggle('open')">Datei-Info</div>
+      <div class="sect-body">
+        <div class="field"><label>Verbundene Datei</label><div id="settFileName" style="padding:10px;background:var(--bg3);border-radius:8px;font-size:13px"></div></div>
+        <div class="field"><label>Eingeloggt als</label><div id="settUserEmail" style="padding:10px;background:var(--bg3);border-radius:8px;font-size:13px;color:var(--text2)"></div></div>
+      </div>
+    </div>
+    <div class="sect open">
+      <div class="sect-head" onclick="this.parentElement.classList.toggle('open')">Aktionen</div>
+      <div class="sect-body">
+        <button class="inline-btn" style="width:100%;margin-bottom:8px" onclick="refreshData()">🔄 Daten neu laden</button>
+        <button class="inline-btn danger" style="width:100%" onclick="logout()">🚪 Abmelden</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+/* ═══════════════════════════════════════════════
+   PTP Mobile – nutzt dieselbe workboard.json wie PTP
+   ═══════════════════════════════════════════════ */
+const GDRIVE_CLIENT_ID='56419258975-2ri3eujer9p6saph1mesa5hihlcae1pl.apps.googleusercontent.com';
+const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const TOKEN_KEY='ptpm_token';
+const FILE_KEY='ptpm_file';
+
+// ── STATE ──
+let gdriveToken=null;
+let gdriveTokenExpires=0;
+let gdriveTokenClient=null;
+let fileId=null;
+let fileName='workboard.json';
+let userEmail='';
+let boards={};
+let statuses=[];
+let currentBoard='';
+let currentTaskId=null;
+let saveTimer=null;
+let dirty=false;
+
+// ── UTILS ──
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+function escAttr(s){return String(s==null?'':s).replace(/"/g,'&quot;').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function generateId(){return 't_'+Date.now()+'_'+Math.random().toString(36).substr(2,6);}
+function toast(msg,kind){const t=document.createElement('div');t.className='toast'+(kind?' '+kind:'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
+function parseMinutes(von,bis){try{if(!von||!bis)return 0;const[vh,vm]=von.split(':').map(Number);const[bh,bm]=bis.split(':').map(Number);const d=(bh*60+bm)-(vh*60+vm);return d>0?d:0;}catch(e){return 0;}}
+
+// ══ AUTH ══
+function gdriveLogin(){
+  initTokenClient();
+  if(!gdriveTokenClient){document.getElementById('loginStatus').textContent='Google-Dienst noch nicht geladen, bitte kurz warten…';return;}
+  gdriveTokenClient.requestAccessToken({prompt:'consent'});
+}
+function initTokenClient(){
+  if(gdriveTokenClient)return;
+  if(!window.google||!window.google.accounts||!window.google.accounts.oauth2)return;
+  gdriveTokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:GDRIVE_CLIENT_ID,
+    scope:GDRIVE_SCOPE,
+    callback:onTokenResponse
+  });
+}
+function onTokenResponse(resp){
+  if(resp.error){document.getElementById('loginStatus').textContent='Fehler: '+resp.error;return;}
+  gdriveToken=resp.access_token;
+  gdriveTokenExpires=Date.now()+(Number(resp.expires_in||3600)-60)*1000;
+  try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){}
+  afterLogin();
+}
+async function afterLogin(){
+  // Versuche User-Info zu holen
+  try{
+    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+gdriveToken}});
+    if(r.ok){const j=await r.json();userEmail=j.email||'';}
+  }catch(e){}
+  await findOrPickFile();
+}
+function tokenValid(){return gdriveToken&&Date.now()<gdriveTokenExpires;}
+function silentRefresh(){
+  return new Promise(resolve=>{
+    initTokenClient();
+    if(!gdriveTokenClient){resolve(false);return;}
+    const prev=gdriveTokenClient.callback;
+    gdriveTokenClient.callback=(resp)=>{
+      gdriveTokenClient.callback=prev;
+      if(resp&&resp.access_token){
+        gdriveToken=resp.access_token;
+        gdriveTokenExpires=Date.now()+(Number(resp.expires_in||3600)-60)*1000;
+        try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){}
+        resolve(true);
+      }else resolve(false);
+    };
+    try{gdriveTokenClient.requestAccessToken({prompt:''});}catch(e){resolve(false);}
+  });
+}
+async function ensureToken(){
+  if(tokenValid())return true;
+  const ok=await silentRefresh();
+  if(!ok){showLogin('Bitte erneut anmelden');return false;}
+  return true;
+}
+function logout(){
+  try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(FILE_KEY);}catch(e){}
+  gdriveToken=null;gdriveTokenExpires=0;fileId=null;boards={};statuses=[];
+  try{if(window.google&&google.accounts&&google.accounts.oauth2&&gdriveToken)google.accounts.oauth2.revoke(gdriveToken,()=>{});}catch(e){}
+  showLogin('Abgemeldet');
+}
+function showLogin(msg){
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('detailScreen').classList.add('hidden');
+  document.getElementById('settingsScreen').classList.add('hidden');
+  document.getElementById('loginStatus').textContent=msg||'';
+}
+function showList(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+  document.getElementById('detailScreen').classList.add('hidden');
+  document.getElementById('settingsScreen').classList.add('hidden');
+}
+
+// ══ DRIVE: Datei finden / laden / speichern ══
+async function findOrPickFile(){
+  document.getElementById('loginStatus').textContent='Suche workboard.json in Drive…';
+  // Aus localStorage
+  try{const c=JSON.parse(localStorage.getItem(FILE_KEY)||'null');if(c&&c.id){fileId=c.id;fileName=c.name||'workboard.json';const ok=await loadFile();if(ok){showList();renderList();return;}}}catch(e){}
+  // Auf Drive suchen
+  try{
+    const r=await fetch("https://www.googleapis.com/drive/v3/files?q=name%3D'workboard.json'%20and%20mimeType%3D'application%2Fjson'%20and%20trashed%3Dfalse&fields=files(id%2Cname%2CmodifiedTime)&orderBy=modifiedTime%20desc",
+      {headers:{Authorization:'Bearer '+gdriveToken}});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    const files=data.files||[];
+    if(files.length===0){document.getElementById('loginStatus').textContent='Keine workboard.json gefunden — erst in PTP am Desktop anlegen.';return;}
+    const chosen=files[0];
+    fileId=chosen.id;fileName=chosen.name||'workboard.json';
+    try{localStorage.setItem(FILE_KEY,JSON.stringify({id:fileId,name:fileName}));}catch(e){}
+    const ok=await loadFile();
+    if(ok){showList();renderList();}
+  }catch(e){document.getElementById('loginStatus').textContent='Drive-Fehler: '+e.message;}
+}
+async function loadFile(){
+  if(!fileId)return false;
+  if(!(await ensureToken()))return false;
+  try{
+    const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media&_='+Date.now(),
+      {headers:{Authorization:'Bearer '+gdriveToken,'Cache-Control':'no-cache'},cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    statuses=Array.isArray(data._statuses)?data._statuses:[];
+    boards={};
+    for(const[k,v]of Object.entries(data)){if(k!=='_statuses'&&Array.isArray(v))boards[k]=v;}
+    const bk=Object.keys(boards);
+    if(!currentBoard||!boards[currentBoard])currentBoard=bk[0]||'';
+    return true;
+  }catch(e){toast('Laden fehlgeschlagen: '+e.message,'error');return false;}
+}
+async function saveFile(){
+  if(!fileId||!gdriveToken)return;
+  if(!(await ensureToken()))return;
+  const obj={_statuses:statuses,...boards};
+  const content=JSON.stringify(obj,null,2);
+  setSaveInd('saving','Speichere…');
+  try{
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',
+      {method:'PATCH',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},body:content});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    setSaveInd('saved','✓ Gespeichert');
+    dirty=false;
+  }catch(e){setSaveInd('error','✗ '+e.message);}
+}
+function scheduleSave(){
+  dirty=true;
+  setSaveInd('saving','…');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{saveFile();},1200);
+}
+function setSaveInd(cls,msg){
+  const el=document.getElementById('saveInd');if(!el)return;
+  el.className='save-indicator '+(cls||'');el.textContent=msg||'';
+  if(cls==='saved')setTimeout(()=>{if(el.textContent===msg)el.textContent='';},2500);
+}
+async function refreshData(){
+  if(dirty){await saveFile();}
+  await loadFile();
+  if(currentTaskId){const t=findTaskById(currentTaskId);if(t)renderDetail(t);else closeDetail();}
+  else renderList();
+  toast('✓ Aktualisiert','success');
+}
+
+// ══ LISTE ══
+function findTaskById(id){for(const k of Object.keys(boards)){const f=(boards[k]||[]).find(t=>t.id===id);if(f)return f;}return null;}
+function findBoardByTaskId(id){for(const k of Object.keys(boards)){if((boards[k]||[]).some(t=>t.id===id))return k;}return null;}
+function renderBoardBar(){
+  const bar=document.getElementById('boardBar');
+  bar.innerHTML=Object.keys(boards).map(n=>'<button class="board-chip'+(n===currentBoard?' active':'')+'" onclick="switchBoard(\''+escAttr(n)+'\')">'+esc(n)+'</button>').join('');
+}
+function switchBoard(n){currentBoard=n;renderList();}
+function renderList(){
+  renderBoardBar();
+  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
+  const list=document.getElementById('taskList');
+  const tasks=boards[currentBoard]||[];
+  const filtered=q?tasks.filter(t=>{
+    const hay=[t.title,t.adresse,t.hausverwaltung,t.schadensbild,(t.tags||[]).join(' '),(t.kontakte||[]).map(k=>k.name).join(' ')].join(' ').toLowerCase();
+    return hay.includes(q);
+  }):tasks;
+  if(!filtered.length){list.innerHTML='<div class="empty">'+(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.')+'</div>';return;}
+  list.innerHTML=filtered.map(t=>{
+    const ks=(t.tags&&t.tags[0])||(t.title?t.title.split(/[–-]/)[0].trim():'');
+    const adr=t.adresse||'';
+    const ampel=t.ampel||'grün';
+    const status=t.status||'';
+    const ausf=t.ausführungsdatum?formatDate(t.ausführungsdatum):'';
+    return '<div class="task-card" onclick="openDetail(\''+escAttr(t.id)+'\')">'
+      +'<div class="task-card-title">'+esc(t.title||'(ohne Titel)')+'</div>'
+      +'<div class="task-card-meta">'
+      +(status?'<span class="badge status">'+esc(status)+'</span>':'')
+      +'<span class="badge ampel-'+ampel+'">●</span>'
+      +(ausf?'<span>📅 '+esc(ausf)+'</span>':'')
+      +(adr?'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">📍 '+esc(adr)+'</span>':'')
+      +'</div></div>';
+  }).join('');
+}
+function formatDate(iso){try{const d=new Date(iso);if(isNaN(d))return iso;return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return iso;}}
+
+// ══ DETAIL ══
+function openDetail(id){
+  const t=findTaskById(id);if(!t)return;
+  currentTaskId=id;
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('detailScreen').classList.remove('hidden');
+  renderDetail(t);
+}
+function closeDetail(){
+  if(dirty){saveFile();}
+  currentTaskId=null;
+  document.getElementById('detailScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+  renderList();
+}
+function renderDetail(t){
+  document.getElementById('detailTitle').textContent=t.title||'(ohne Titel)';
+  const body=document.getElementById('detailBody');
+  const statusOpts=statuses.map(s=>'<option value="'+escAttr(s)+'"'+(s===t.status?' selected':'')+'>'+esc(s)+'</option>').join('');
+  const kontakte=t.kontakte||[];
+  const kontakteHtml=kontakte.map((k,i)=>renderKontakt(k,i)).join('');
+  const termine=t.ausserhausTermine||[];
+  const zeiten=t.zeitEntries||[];
+  const notizVerlauf=t.notizVerlauf||[];
+  const fotos=t.fotos||[];
+
+  body.innerHTML=''
+    // ── STAMMDATEN ──
+    +'<div class="sect open"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">Stammdaten</div><div class="sect-body">'
+      +'<div class="field"><label>Titel</label><input type="text" value="'+escAttr(t.title||'')+'" oninput="updateField(\'title\',this.value);document.getElementById(\'detailTitle\').textContent=this.value||\'(ohne Titel)\'"></div>'
+      +'<div class="field-row"><div class="field"><label>Kostenstelle / Tags</label><input type="text" value="'+escAttr((t.tags||[]).join(', '))+'" placeholder="z.B. 260036" oninput="updateTags(this.value)"></div></div>'
+      +'<div class="field-row"><div class="field"><label>Status</label><select onchange="updateField(\'status\',this.value)">'+statusOpts+'</select></div>'
+      +'<div class="field" style="flex:0 0 100px"><label>Ampel</label><select onchange="updateField(\'ampel\',this.value)">'
+        +['grün','orange','rot'].map(a=>'<option value="'+a+'"'+(a===(t.ampel||'grün')?' selected':'')+'>'+({'grün':'🟢','orange':'🟠','rot':'🔴'}[a])+'</option>').join('')
+      +'</select></div></div>'
+      +'<div class="field"><label>Ausführungsdatum</label><input type="date" value="'+escAttr(t.ausführungsdatum||'')+'" onchange="updateField(\'ausführungsdatum\',this.value)"></div>'
+      +'<div class="field"><label>Adresse</label><div class="field-row" style="gap:6px"><input type="text" value="'+escAttr(t.adresse||'')+'" placeholder="Straße, PLZ Ort" oninput="updateField(\'adresse\',this.value);updateNavBtn()"><a id="navBtn" class="nav-link'+(t.adresse?'':' disabled')+'" href="'+(t.adresse?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(t.adresse):'#')+'" target="_blank">🗺️</a></div></div>'
+      +'<div class="field"><label>Hausverwaltung</label><input type="text" value="'+escAttr(t.hausverwaltung||'')+'" oninput="updateField(\'hausverwaltung\',this.value)"></div>'
+      +'<div class="field"><label>Schaden / Beschreibung</label><textarea oninput="updateField(\'schadensbild\',this.value)">'+esc(t.schadensbild||'')+'</textarea></div>'
+    +'</div></div>'
+    // ── KONTAKTE ──
+    +'<div class="sect'+(kontakte.length?' open':'')+'"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">Kontakte ('+kontakte.length+')</div><div class="sect-body">'
+      +'<div id="kontakteList">'+kontakteHtml+'</div>'
+      +'<button class="add-btn" onclick="addKontakt()">+ Kontakt hinzufügen</button>'
+    +'</div></div>'
+    // ── TERMINE ──
+    +'<div class="sect'+(termine.length?' open':'')+'"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">📅 Außer-Haus-Termine ('+termine.length+')</div><div class="sect-body">'
+      +'<div id="termineList">'+renderTermineRows(termine)+'</div>'
+      +'<button class="add-btn" onclick="addTermin()">+ Termin hinzufügen</button>'
+    +'</div></div>'
+    // ── ZEITERFASSUNG ──
+    +'<div class="sect'+(zeiten.length?' open':'')+'"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">⏱ Zeiterfassung ('+zeiten.length+')</div><div class="sect-body">'
+      +'<div id="zeitenList">'+renderZeitenRows(zeiten)+'</div>'
+      +'<button class="add-btn" onclick="addZeit()">+ Zeit manuell hinzufügen</button>'
+      +'<div id="zeitGesamt" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;text-align:center;font-weight:600">'+renderZeitGesamtText(zeiten)+'</div>'
+    +'</div></div>'
+    // ── NOTIZEN ──
+    +'<div class="sect"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">📝 Notizen</div><div class="sect-body">'
+      +'<div class="field"><label>Dauerhafte Notiz</label><textarea placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)">'+esc(t.desc||'')+'</textarea></div>'
+      +'<div class="field"><label>Chronologische Einträge</label><div id="notizList">'+renderNotizen(notizVerlauf)+'</div>'
+      +'<div class="field-row" style="margin-top:6px"><input type="text" id="newNotizInput" placeholder="Kurze Notiz mit Zeitstempel…"><button class="inline-btn primary" onclick="addNotiz()">+</button></div></div>'
+    +'</div></div>'
+    // ── FOTOS ──
+    +'<div class="sect'+(fotos.length?' open':'')+'"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">📷 Fotos ('+fotos.length+')</div><div class="sect-body">'
+      +'<div id="fotoGrid" class="foto-grid">'+renderFotos(fotos)+'</div>'
+      +'<button class="add-btn" onclick="document.getElementById(\'fotoInput\').click()">📷 Foto aufnehmen / wählen</button>'
+      +'<input type="file" id="fotoInput" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files)">'
+      +'<div class="field" style="margin-top:8px"><label>Drive-Ordner für Fotos</label><input type="text" value="'+escAttr(t.gdrive||'')+'" placeholder="Google Drive-Ordner-Link" oninput="updateField(\'gdrive\',this.value)"></div>'
+    +'</div></div>'
+    // ── LÖSCHEN ──
+    +'<div class="sect"><div class="sect-head" onclick="this.parentElement.classList.toggle(\'open\')">⚠ Task löschen</div><div class="sect-body">'
+      +'<button class="inline-btn danger" style="width:100%" onclick="deleteTask()">🗑 Task löschen</button>'
+    +'</div></div>';
+}
+
+// ══ FELD-EDITS ══
+function currentTask(){return currentTaskId?findTaskById(currentTaskId):null;}
+function updateField(field,value){
+  const t=currentTask();if(!t)return;
+  t[field]=value;scheduleSave();
+}
+function updateTags(value){
+  const t=currentTask();if(!t)return;
+  t.tags=value.split(',').map(s=>s.trim()).filter(Boolean);
+  scheduleSave();
+}
+function updateNavBtn(){
+  const t=currentTask();if(!t)return;
+  const btn=document.getElementById('navBtn');if(!btn)return;
+  if(t.adresse){btn.classList.remove('disabled');btn.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(t.adresse);}
+  else{btn.classList.add('disabled');btn.href='#';}
+}
+
+// ══ KONTAKTE ══
+function renderKontakt(k,i){
+  const rollen={mieter:'🏠 Mieter',eigentuemer:'👤 Eigentümer',hausverwaltung:'🏢 HV',sonstiges:'👥 Sonstiges'};
+  const rolleOpts=Object.entries(rollen).map(([v,l])=>'<option value="'+v+'"'+(v===(k.rolle||'mieter')?' selected':'')+'>'+l+'</option>').join('');
+  const telHref=k.tel?'tel:'+String(k.tel).replace(/\s+/g,''):'#';
+  return '<div class="kontakt-entry">'
+    +'<div class="kontakt-entry-head"><select onchange="updateKontakt('+i+',\'rolle\',this.value)">'+rolleOpts+'</select>'
+    +'<button class="rm-btn" onclick="removeKontakt('+i+')">✕</button></div>'
+    +'<div class="field"><label>Name</label><input type="text" value="'+escAttr(k.name||'')+'" oninput="updateKontakt('+i+',\'name\',this.value)"></div>'
+    +'<div class="field"><label>Telefon</label><div class="field-row" style="gap:6px"><input type="tel" value="'+escAttr(k.tel||'')+'" oninput="updateKontakt('+i+',\'tel\',this.value)"><a class="call-link'+(k.tel?'':' disabled')+'" href="'+telHref+'">📞</a></div></div>'
+    +'<div class="field"><label>E-Mail</label><input type="email" value="'+escAttr(k.email||'')+'" oninput="updateKontakt('+i+',\'email\',this.value)"></div>'
+    +'</div>';
+}
+function addKontakt(){
+  const t=currentTask();if(!t)return;
+  if(!t.kontakte)t.kontakte=[];
+  t.kontakte.push({rolle:'mieter',name:'',tel:'',email:''});
+  scheduleSave();renderDetail(t);
+}
+function removeKontakt(i){
+  const t=currentTask();if(!t)return;
+  t.kontakte.splice(i,1);scheduleSave();renderDetail(t);
+}
+function updateKontakt(i,f,v){
+  const t=currentTask();if(!t)return;
+  if(!t.kontakte||!t.kontakte[i])return;
+  t.kontakte[i][f]=v;scheduleSave();
+}
+
+// ══ TERMINE ══
+function renderTermineRows(list){
+  if(!list||!list.length)return '<div style="color:var(--text2);font-size:13px;padding:6px 0">Noch keine Termine.</div>';
+  return list.map((t,i)=>''
+    +'<div class="termin-row">'
+      +'<input type="date" value="'+escAttr(t.date||'')+'" onchange="updateTermin('+i+',\'date\',this.value)">'
+      +'<input type="time" value="'+escAttr(t.von||'')+'" onchange="updateTermin('+i+',\'von\',this.value)">'
+      +'<input type="time" value="'+escAttr(t.bis||'')+'" onchange="updateTermin('+i+',\'bis\',this.value)">'
+      +'<input type="text" placeholder="Beschreibung" value="'+escAttr(t.beschreibung||'')+'" oninput="updateTermin('+i+',\'beschreibung\',this.value)">'
+      +'<button class="rm-btn" onclick="removeTermin('+i+')">✕</button>'
+    +'</div>'
+    +'<button class="inline-btn" style="width:100%;margin:2px 0 8px" onclick="openGcal('+i+')">📅 In Google Kalender</button>'
+  ).join('');
+}
+function addTermin(){
+  const t=currentTask();if(!t)return;
+  if(!t.ausserhausTermine)t.ausserhausTermine=[];
+  t.ausserhausTermine.push({date:'',von:'',bis:'',beschreibung:''});
+  scheduleSave();renderDetail(t);
+}
+function removeTermin(i){
+  const t=currentTask();if(!t)return;
+  t.ausserhausTermine.splice(i,1);scheduleSave();renderDetail(t);
+}
+function updateTermin(i,f,v){
+  const t=currentTask();if(!t)return;
+  if(!t.ausserhausTermine||!t.ausserhausTermine[i])return;
+  t.ausserhausTermine[i][f]=v;scheduleSave();
+}
+function openGcal(i){
+  const t=currentTask();if(!t)return;
+  const tm=t.ausserhausTermine[i];if(!tm)return;
+  const title=encodeURIComponent(t.title||'Termin');
+  const desc=encodeURIComponent((tm.beschreibung||'')+'\n'+(t.adresse||''));
+  const loc=encodeURIComponent(t.adresse||'');
+  let dates='';
+  if(tm.date){const d=tm.date.replace(/-/g,'');if(tm.von&&tm.bis)dates=d+'T'+tm.von.replace(':','')+'00/'+d+'T'+tm.bis.replace(':','')+'00';else dates=d+'/'+d;}
+  window.open('https://calendar.google.com/calendar/render?action=TEMPLATE&text='+title+'&dates='+dates+'&location='+loc+'&details='+desc,'_blank');
+}
+
+// ══ ZEITEN ══
+function renderZeitenRows(list){
+  if(!list||!list.length)return '<div style="color:var(--text2);font-size:13px;padding:6px 0">Noch keine Einträge.</div>';
+  return list.map((z,i)=>''
+    +'<div class="zeit-row">'
+      +'<input type="date" value="'+escAttr(z.date||'')+'" onchange="updateZeit('+i+',\'date\',this.value)">'
+      +'<input type="time" value="'+escAttr(z.von||'')+'" onchange="updateZeit('+i+',\'von\',this.value);updateZeitGesamt()">'
+      +'<input type="time" value="'+escAttr(z.bis||'')+'" onchange="updateZeit('+i+',\'bis\',this.value);updateZeitGesamt()">'
+      +'<input type="text" placeholder="Beschreibung" value="'+escAttr(z.beschreibung||'')+'" oninput="updateZeit('+i+',\'beschreibung\',this.value)">'
+      +'<button class="rm-btn" onclick="removeZeit('+i+')">✕</button>'
+    +'</div>'
+  ).join('');
+}
+function renderZeitGesamtText(list){
+  const min=(list||[]).reduce((s,z)=>s+parseMinutes(z.von,z.bis),0);
+  const h=Math.floor(min/60),m=min%60;
+  return 'Gesamt: '+(h>0?h+'h ':'')+m+' min';
+}
+function updateZeitGesamt(){
+  const t=currentTask();if(!t)return;
+  const el=document.getElementById('zeitGesamt');if(el)el.textContent=renderZeitGesamtText(t.zeitEntries||[]);
+}
+function addZeit(){
+  const t=currentTask();if(!t)return;
+  if(!t.zeitEntries)t.zeitEntries=[];
+  const today=new Date().toISOString().split('T')[0];
+  t.zeitEntries.push({date:today,von:'',bis:'',beschreibung:''});
+  scheduleSave();renderDetail(t);
+}
+function removeZeit(i){
+  const t=currentTask();if(!t)return;
+  t.zeitEntries.splice(i,1);scheduleSave();renderDetail(t);
+}
+function updateZeit(i,f,v){
+  const t=currentTask();if(!t)return;
+  if(!t.zeitEntries||!t.zeitEntries[i])return;
+  t.zeitEntries[i][f]=v;scheduleSave();
+}
+
+// ══ NOTIZEN (chronologisch) ══
+function renderNotizen(list){
+  if(!list||!list.length)return '<div style="color:var(--text2);font-size:13px;padding:6px 0">Noch keine Einträge.</div>';
+  return list.slice().reverse().map((n,idx)=>{
+    const i=list.length-1-idx;
+    return '<div class="notiz-entry"><span class="ts">'+esc(n.ts||'')+'</span>'+esc(n.text||'')+' <button class="rm-btn" style="float:right;height:26px;font-size:11px;padding:0 8px" onclick="removeNotiz('+i+')">✕</button></div>';
+  }).join('');
+}
+function addNotiz(){
+  const t=currentTask();if(!t)return;
+  const inp=document.getElementById('newNotizInput');
+  const text=(inp.value||'').trim();
+  if(!text)return;
+  if(!t.notizVerlauf)t.notizVerlauf=[];
+  const ts=new Date().toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  t.notizVerlauf.push({ts,text});
+  inp.value='';
+  scheduleSave();renderDetail(t);
+}
+function removeNotiz(i){
+  const t=currentTask();if(!t)return;
+  t.notizVerlauf.splice(i,1);scheduleSave();renderDetail(t);
+}
+
+// ══ FOTOS (Platzhalter, Upload in Etappe 3) ══
+function renderFotos(list){
+  if(!list||!list.length)return '<div style="color:var(--text2);font-size:13px;padding:6px 0;grid-column:1/-1">Noch keine Fotos.</div>';
+  return list.map((f,i)=>'<div class="foto-thumb"><img src="'+escAttr(f.thumb||f.url||'')+'" alt=""><button class="del" onclick="event.stopPropagation();removeFoto('+i+')">✕</button></div>').join('');
+}
+function uploadFoto(files){
+  toast('Foto-Upload kommt in Etappe 3','error');
+}
+function removeFoto(i){
+  const t=currentTask();if(!t)return;
+  if(!confirm('Foto-Verweis entfernen? (Die Datei in Drive bleibt bestehen.)'))return;
+  t.fotos.splice(i,1);scheduleSave();renderDetail(t);
+}
+
+// ══ TASK ANLEGEN / LÖSCHEN ══
+function newTask(){
+  if(!currentBoard){toast('Erst ein Board wählen','error');return;}
+  const title=prompt('Titel des neuen Tasks:');
+  if(!title||!title.trim())return;
+  const newT={
+    id:generateId(),title:title.trim(),desc:'',owner:'',due:'',status:statuses[0]||'',ampel:'grün',
+    ausführungsdatum:'',tags:[],source:'',hausverwaltung:'',adresse:'',schadensbild:'',
+    kontakte:[],gdrive:'',nas:'',links:[],attachments:[],timeEntries:[],
+    ausserhausTermine:[],zeitEntries:[],notizVerlauf:[],fotos:[]
+  };
+  if(!boards[currentBoard])boards[currentBoard]=[];
+  boards[currentBoard].push(newT);
+  scheduleSave();
+  openDetail(newT.id);
+}
+function deleteTask(){
+  const t=currentTask();if(!t)return;
+  if(!confirm('Task „'+(t.title||'')+'" wirklich löschen?'))return;
+  const bn=findBoardByTaskId(t.id);
+  if(bn){boards[bn]=boards[bn].filter(x=>x.id!==t.id);}
+  currentTaskId=null;scheduleSave();closeDetail();
+  toast('Task gelöscht','success');
+}
+
+// ══ SETTINGS ══
+function openSettings(){
+  document.getElementById('settingsScreen').classList.remove('hidden');
+  document.getElementById('listScreen').classList.add('hidden');
+  document.getElementById('settFileName').textContent=fileName||'(noch nicht verbunden)';
+  document.getElementById('settUserEmail').textContent=userEmail||'(unbekannt)';
+}
+function closeSettings(){
+  document.getElementById('settingsScreen').classList.add('hidden');
+  document.getElementById('listScreen').classList.remove('hidden');
+}
+
+// ══ START ══
+window.addEventListener('load',async()=>{
+  // Versuche Auto-Login
+  try{
+    const stored=JSON.parse(localStorage.getItem(TOKEN_KEY)||'null');
+    if(stored&&stored.token&&stored.exp&&Date.now()<stored.exp){
+      gdriveToken=stored.token;gdriveTokenExpires=stored.exp;
+      document.getElementById('loginStatus').textContent='Token wiederhergestellt, lade Datei…';
+      afterLogin();return;
+    }
+  }catch(e){}
+  // GIS initialisieren, dann silent refresh versuchen
+  setTimeout(async()=>{
+    initTokenClient();
+    const stored=JSON.parse(localStorage.getItem(TOKEN_KEY)||'null');
+    if(stored&&stored.token){
+      document.getElementById('loginStatus').textContent='Verbinde automatisch…';
+      const ok=await silentRefresh();
+      if(ok){afterLogin();return;}
+    }
+    document.getElementById('loginStatus').textContent='';
+  },800);
+});
+
+// Auto-Speichern beim Schließen
+window.addEventListener('beforeunload',(e)=>{if(dirty){saveFile();}});
+window.addEventListener('pagehide',()=>{if(dirty){saveFile();}});
+</script>
+</body>
+</html>
