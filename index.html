@@ -65,9 +65,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .field input,.field textarea,.field select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:calc(15px * var(--m-scale));font-family:inherit}
 .field textarea{min-height:80px;resize:vertical}
 .expandable-ta.expanded{min-height:calc(260px * var(--m-scale));font-size:calc(15px * var(--m-scale));line-height:1.5}
-/* ── GRÖSSEN-SLIDER (wie im Desktop-Modal) ── */
-.size-bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:9}
-.size-bar.open{display:flex}
+/* ── GRÖSSEN-SLIDER (immer sichtbar im Detail) ── */
+.size-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:9}
 .size-bar-icon{font-size:14px;color:var(--text2)}
 .size-bar input[type=range]{flex:1;accent-color:var(--accent);margin:0}
 .size-bar-val{font-size:12px;color:var(--text);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
@@ -179,14 +178,12 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <div class="hdr">
     <button class="hdr-btn icon" onclick="closeDetail()">←</button>
     <div class="hdr-title" id="detailTitle">Task</div>
-    <button class="hdr-btn icon" onclick="toggleMSizeBar()" title="Textgröße">🔎</button>
     <span class="save-indicator" id="saveInd"></span>
   </div>
   <div class="size-bar" id="mSizeBar">
-    <span class="size-bar-icon">A</span>
+    <span class="size-bar-icon" style="font-size:12px;color:var(--text2)">A</span>
     <input id="mSizeSlider" type="range" min="80" max="180" step="5" value="100" oninput="setMobileScale(this.value)">
     <span class="size-bar-val" id="mSizeVal">100%</span>
-    <button class="size-bar-close" onclick="toggleMSizeBar()" title="Schließen">✕</button>
   </div>
   <div class="detail-body" id="detailBody"></div>
 </div>
@@ -216,6 +213,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
 <script>
 /* ═══════════════════════════════════════════════
    PTP Mobile – nutzt dieselbe workboard.json wie PTP
@@ -412,12 +410,11 @@ function _applyMobileFilter(data){
   statuses=Array.isArray(data._statuses)?data._statuses:[];
   mobileWhitelist=Array.isArray(data._mobileBoards)?data._mobileBoards.slice():[];
   boards={};hiddenBoards={};
-  const hasWhitelist=mobileWhitelist.length>0;
+  // Alle Boards anzeigen — keine Whitelist-Filterung für die Darstellung
   for(const[k,v]of Object.entries(data)){
     if(k.startsWith('_'))continue;
     if(!Array.isArray(v))continue;
-    if(hasWhitelist && !mobileWhitelist.includes(k)){hiddenBoards[k]=v;}
-    else{boards[k]=v;}
+    boards[k]=v;
   }
 }
 async function loadFile(){
@@ -641,21 +638,24 @@ function renderList(){
     return hay.includes(q);
   }):tasks;
   if(!filtered.length){list.innerHTML='<div class="empty">'+(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.')+'</div>';return;}
+  const timerState=_loadTimerState();
+  const runningTaskId=timerState?timerState.taskId:null;
   list.innerHTML=filtered.map(t=>{
-    const ks=(t.tags&&t.tags[0])||(t.title?t.title.split(/[–-]/)[0].trim():'');
-    const adr=t.adresse||'';
     const ampel=t.ampel||'grün';
     const status=t.status||'';
     const ausf=t.ausführungsdatum?formatDate(t.ausführungsdatum):'';
+    const isRunning=t.id===runningTaskId;
     return '<div class="task-card" onclick="openDetail(\''+escAttr(t.id)+'\')">'
       +'<div class="task-card-title">'+esc(t.title||'(ohne Titel)')+'</div>'
       +'<div class="task-card-meta">'
       +(status?'<span class="badge status">'+esc(status)+'</span>':'')
       +'<span class="badge ampel-'+ampel+'">●</span>'
       +(ausf?'<span>📅 '+esc(ausf)+'</span>':'')
-      +(adr?'<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">📍 '+esc(adr)+'</span>':'')
+      +(isRunning?'<span class="task-timer-badge" style="color:var(--orange);font-size:12px;font-weight:600;margin-left:auto">⏱ '+formatTimerFor(t.id)+'</span>':'')
       +'</div></div>';
   }).join('');
+  // Tick-Loop für laufende Stoppuhr in der Kartenliste
+  if(runningTaskId)_startListTickLoop();else _stopListTickLoop();
 }
 function formatDate(iso){try{const d=new Date(iso);if(isNaN(d))return iso;return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return iso;}}
 
@@ -678,6 +678,9 @@ async function closeDetail(){
     try{await saveFile();}catch(e){/* saveFile hat bereits Retry/Toast */}
   }
   currentTaskId=null;
+  // Sektionen beim Zurückgehen zuklappen — beim nächsten Öffnen beginnen alle frisch
+  _mOpenSections={'Stammdaten':true};
+  _mOpenSectionsForTask=null;
   _stopTickLoop();
   document.getElementById('detailScreen').classList.add('hidden');
   document.getElementById('listScreen').classList.remove('hidden');
@@ -762,8 +765,8 @@ function renderDetail(t){
     +'</div></div>';
   // Authentifizierte Thumbnails nachladen (Blob-URL via Drive API)
   try{hydrateFotoThumbs();}catch(e){console.warn('hydrateFotoThumbs:',e);}
-  // Gespeicherte Textgröße & Slider-Sichtbarkeit anwenden
-  try{applyStoredMobileScale();applyStoredSizeBarVisibility();}catch(e){}
+  // Gespeicherte Textgröße anwenden
+  try{applyStoredMobileScale();}catch(e){}
 }
 
 // ══ FELD-EDITS ══
@@ -935,6 +938,21 @@ function toggleMobileTimer(taskId){
     toast('▶ Stoppuhr läuft','success');
   }
 }
+// ── Tick-Loop für Stoppuhr-Anzeige in der Task-Kartenliste ──
+let _listTickTimer=null;
+function _updateListTimerBadge(){
+  const s=_loadTimerState();if(!s||!s.taskId){_stopListTickLoop();return;}
+  const badges=document.querySelectorAll('.task-timer-badge');
+  if(!badges.length){_stopListTickLoop();renderList();return;}
+  badges.forEach(el=>{el.textContent='⏱ '+formatTimerFor(s.taskId);});
+}
+function _startListTickLoop(){
+  if(_listTickTimer)clearInterval(_listTickTimer);
+  _listTickTimer=setInterval(_updateListTimerBadge,1000);
+}
+function _stopListTickLoop(){
+  if(_listTickTimer){clearInterval(_listTickTimer);_listTickTimer=null;}
+}
 function resumeMobileTimerIfNeeded(){
   const s=_loadTimerState();if(!s||!s.taskId)return;
   const t=findTaskById(s.taskId);
@@ -1087,7 +1105,7 @@ function renderAttachmentsMob(list){
   return list.map((a,i)=>{
     const isImg=a.type&&a.type.startsWith('image/');
     return '<div class="attach-row-mob">'
-      +(isImg?'<img class="attach-thumb-mob" src="'+escAttr(a.data||'')+'" onclick="openAttachMob('+i+')">':'<div class="attach-icon-mob">'+attachIconMob(a.type)+'</div>')
+      +(isImg?'<img class="attach-thumb-mob" src="'+escAttr(a.data||'')+'" onclick="openAttachMob('+i+')">':'<div class="attach-icon-mob" onclick="openAttachMob('+i+')" style="cursor:pointer">'+attachIconMob(a.type)+'</div>')
       +'<div class="attach-meta-mob"><div class="attach-name-mob">'+esc(a.name||'Datei')+'</div><div class="attach-size-mob">'+formatBytesMob(a.size)+'</div></div>'
       +'<button class="inline-btn" style="padding:6px 10px;font-size:12px" onclick="downloadAttachMob('+i+')">↓</button>'
       +'</div>';
@@ -1097,7 +1115,20 @@ function openAttachMob(i){
   const t=currentTask();if(!t||!t.attachments||!t.attachments[i])return;
   const a=t.attachments[i];
   if(!a.data)return;
-  // In-App-Lightbox statt window.open (auf Handy unzuverlässig)
+  if(a.type==='application/pdf'){
+    // PDF als Blob-URL in neuem Tab öffnen
+    try{
+      const b64=a.data.includes(',')?(a.data.split(',')[1]):a.data;
+      const bin=atob(b64);const bytes=new Uint8Array(bin.length);
+      for(let j=0;j<bin.length;j++)bytes[j]=bin.charCodeAt(j);
+      const blob=new Blob([bytes],{type:'application/pdf'});
+      const url=URL.createObjectURL(blob);
+      window.open(url,'_blank');
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){downloadAttachMob(i);}
+    return;
+  }
+  // Bilder und sonstiges → Lightbox
   openLightbox(a.data,a.name||'Anhang','');
 }
 function downloadAttachMob(i){
@@ -1278,6 +1309,45 @@ window.addEventListener('beforeunload',(e)=>{if(dirty){saveFile();}});
 window.addEventListener('pagehide',()=>{if(dirty){saveFile();}});
 </script>
 
+<!-- ══ EXIF HELPER ══ -->
+<script>
+function embedExifCaption(dataUrl,caption){
+  try{
+    if(!window.piexif)return dataUrl;
+    let exifObj;
+    try{exifObj=piexif.load(dataUrl);}
+    catch(e){exifObj={'0th':{},'Exif':{},'GPS':{},'1st':{},'thumbnail':null};}
+    if(!exifObj['0th'])exifObj['0th']={};
+    exifObj['0th'][piexif.ImageIFD.ImageDescription]=caption;
+    const exifBytes=piexif.dump(exifObj);
+    return piexif.insert(exifBytes,dataUrl);
+  }catch(e){console.warn('EXIF:',e);return dataUrl;}
+}
+async function _embedExifInDrive(driveId,caption){
+  if(!driveId||!caption||!window.piexif)return;
+  // Foto aus Drive laden
+  const blobUrl=await _fetchFotoBlob(driveId);
+  if(!blobUrl)return;
+  // Blob → DataURL
+  const blob=await fetch(blobUrl).then(r=>r.blob());
+  const dataUrl=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=e=>res(e.target.result);fr.onerror=rej;fr.readAsDataURL(blob);});
+  if(!dataUrl.startsWith('data:image/jpeg')&&!dataUrl.startsWith('data:image/jpg'))return;
+  // EXIF einbetten
+  const newDataUrl=embedExifCaption(dataUrl,caption);
+  if(newDataUrl===dataUrl)return;
+  // DataURL → Blob
+  const b64=newDataUrl.split(',')[1];
+  const bin=atob(b64);const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const newBlob=new Blob([bytes],{type:'image/jpeg'});
+  // In Drive überschreiben
+  await fetch('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveId)+'?uploadType=media',
+    {method:'PATCH',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'image/jpeg'},body:newBlob});
+  // Cache leeren → nächster Load zeigt neues Bild
+  _fotoBlobCache.delete(driveId);
+}
+</script>
+
 <!-- ══ LIGHTBOX (Vollbild-Vorschau) ══ -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
   <div class="lb-caption" id="lbCaption"></div>
@@ -1353,18 +1423,27 @@ function lbEditCaption(){
 function lbCancelCaption(){
   document.getElementById('lbTextbar').classList.remove('editing');
 }
-function lbSaveCaption(){
+async function lbSaveCaption(){
   if(_lbFotoIdx<0)return;
   const t=currentTask();if(!t||!t.fotos||!t.fotos[_lbFotoIdx])return;
   const ta=document.getElementById('lbTextInput');
   const val=ta?ta.value.trim():'';
-  t.fotos[_lbFotoIdx].caption=val;
+  const f=t.fotos[_lbFotoIdx];
+  f.caption=val;
+  // Caption sofort im JSON sichern
   forceSave();
   _lbShowCaption(val);
   document.getElementById('lbTextbar').classList.remove('editing');
-  // Grid-Badge aktualisieren, ohne die Lightbox zu schließen
   try{_updateFotoCaptionBadge(_lbFotoIdx,val);}catch(e){}
   toast('✓ Beschreibung gespeichert','success');
+  // EXIF asynchron in Drive-Datei einbetten (nur JPEG)
+  if(val && f.driveId && (f.mimeType==='image/jpeg'||f.mimeType==='image/jpg'||f.mimeType==='image/jpeg')){
+    try{
+      if(!(await ensureToken()))return;
+      await _embedExifInDrive(f.driveId,val);
+      toast('✓ EXIF gespeichert','success');
+    }catch(e){console.warn('EXIF-Upload:',e);}
+  }
 }
 function _updateFotoCaptionBadge(i,txt){
   const thumb=document.querySelectorAll('#fotoGrid .foto-thumb')[i];
