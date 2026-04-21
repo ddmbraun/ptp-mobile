@@ -137,6 +137,21 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .lightbox .lb-text-edit-form textarea{flex:1;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;min-height:56px;resize:vertical;}
 .lightbox .lb-text-edit-form button{background:rgba(255,255,255,.9);color:#000;border:none;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
 .lightbox .lb-text-edit-form button.cancel{background:rgba(255,255,255,.2);color:#fff;}
+/* ── 360° Pannellum Container ── */
+#pannellumContainer{display:none;position:absolute;inset:0;z-index:1;}
+#pannellumContainer.active{display:block;}
+/* ── Zeichen-Canvas ── */
+#drawCanvas{display:none;position:absolute;inset:0;cursor:crosshair;touch-action:none;z-index:2;}
+#drawCanvas.active{display:block;}
+/* ── Zeichen-Toolbar ── */
+.lb-draw-bar{position:absolute;top:calc(env(safe-area-inset-top,0) + 60px);left:0;right:0;display:none;justify-content:center;flex-wrap:wrap;gap:6px;align-items:center;z-index:10003;padding:0 10px;}
+.lb-draw-bar.visible{display:flex;}
+.lb-draw-color{width:34px;height:34px;border:2px solid rgba(255,255,255,.5);border-radius:8px;cursor:pointer;padding:2px;background:none;}
+.lb-draw-size{width:65px;accent-color:#6a8aff;}
+.lb-draw-btn{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 11px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.lb-draw-btn.on{background:rgba(106,138,255,.7);border-color:#6a8aff;}
+.lb-draw-btn.save{background:rgba(74,222,128,.25);border-color:#4ade80;color:#4ade80;}
+.lb-draw-btn.discard{background:rgba(248,113,113,.2);border-color:#f87171;color:#f87171;}
 /* Beschreibung unter dem Grid-Thumbnail */
 .foto-thumb .cap-badge{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1.2;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
 .foto-placeholder{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text2)}
@@ -230,6 +245,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+<script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
 <script>
 /* ═══════════════════════════════════════════════
    PTP Mobile – nutzt dieselbe workboard.json wie PTP
@@ -1510,11 +1527,22 @@ async function _embedExifInDrive(driveId,caption){
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
   <div class="lb-caption" id="lbCaption"></div>
   <img id="lbImg" alt="">
+  <div id="pannellumContainer"></div>
+  <canvas id="drawCanvas"></canvas>
+  <!-- Zeichen-Toolbar -->
+  <div class="lb-draw-bar" id="lbDrawBar" onclick="event.stopPropagation()">
+    <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000" title="Farbe">
+    <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5" title="Stärke">
+    <button class="lb-draw-btn" id="drawEraserBtn" onclick="event.stopPropagation();lbToggleEraser(this)">⬜ Radierer</button>
+    <button class="lb-draw-btn save" onclick="event.stopPropagation();lbSaveDraw()">💾 Speichern</button>
+    <button class="lb-draw-btn discard" onclick="event.stopPropagation();lbDiscardDraw()">✕ Verwerfen</button>
+  </div>
   <button class="lb-close" onclick="event.stopPropagation();closeLightbox()" aria-label="Schließen">✕</button>
   <div class="lb-textbar" id="lbTextbar" onclick="event.stopPropagation()">
     <div class="lb-text-view">
       <span class="lb-text-view-label" id="lbTextViewLabel"></span>
       <button class="lb-text-edit-btn" onclick="event.stopPropagation();lbEditCaption()">📝 Text</button>
+      <button class="lb-text-edit-btn" onclick="event.stopPropagation();lbStartDraw()" style="margin-left:4px">✏️ Malen</button>
     </div>
     <div class="lb-text-edit-form">
       <textarea id="lbTextInput" placeholder="Kurze Beschreibung zum Foto…" rows="2"></textarea>
@@ -1528,24 +1556,34 @@ async function _embedExifInDrive(driveId,caption){
 </div>
 <script>
 let _lbCurrentUrl='';
-let _lbFotoIdx=-1;   // -1 = kein Foto mit Text-Support
+let _lbFotoIdx=-1;
+let _pannellumViewer=null;
 function openLightbox(src,name,externalUrl,opts){
   if(!src&&!externalUrl){return;}
   opts=opts||{};
+  _lbClosePannellum();
+  lbDiscardDraw();
   const lb=document.getElementById('lightbox');
   const img=document.getElementById('lbImg');
   const cap=document.getElementById('lbCaption');
   const btnOrig=document.getElementById('lbOpenOrig');
   img.onerror=()=>{img.style.display='none';cap.textContent=(name||'')+' — Vorschau nicht verfügbar';};
-  img.onload=()=>{img.style.display='';cap.textContent=name||'';};
+  img.onload=()=>{
+    cap.textContent=name||'';
+    // 360°-Erkennung: Seitenverhältnis >= 1.8 → Pannellum
+    if(img.naturalWidth&&img.naturalHeight&&(img.naturalWidth/img.naturalHeight)>=1.8){
+      _lbInitPannellum(src);
+    }else{
+      img.style.display='';
+    }
+  };
   img.style.display=src?'':'none';
   if(src){img.src=src;}else{img.removeAttribute('src');}
   cap.textContent=src?(name||''):((name||'')+' — lade…');
   _lbCurrentUrl=externalUrl||'';
   btnOrig.style.display=_lbCurrentUrl?'':'none';
-  // Caption-Bar nur bei Fotos mit Index ein-/ausblenden
   const bar=document.getElementById('lbTextbar');
-  if(typeof opts.fotoIdx==='number' && opts.fotoIdx>=0){
+  if(typeof opts.fotoIdx==='number'&&opts.fotoIdx>=0){
     _lbFotoIdx=opts.fotoIdx;
     _lbShowCaption(opts.caption||'');
     bar.classList.add('open');
@@ -1555,8 +1593,123 @@ function openLightbox(src,name,externalUrl,opts){
     bar.classList.remove('open','editing');
   }
   lb.classList.add('open');
-  // ESC-Taste
   document.addEventListener('keydown',_lbOnKey);
+}
+// ── 360° Pannellum ──
+function _lbInitPannellum(blobUrl){
+  const container=document.getElementById('pannellumContainer');
+  const img=document.getElementById('lbImg');
+  if(!container)return;
+  img.style.display='none';
+  container.innerHTML='';
+  container.classList.add('active');
+  if(window.pannellum){
+    _pannellumViewer=pannellum.viewer(container,{
+      type:'equirectangular',panorama:blobUrl,
+      autoLoad:true,showControls:false,compass:false,
+      mouseZoom:true,draggable:true,
+    });
+  }else{img.style.display='';container.classList.remove('active');}
+}
+function _lbClosePannellum(){
+  if(_pannellumViewer){try{_pannellumViewer.destroy();}catch(e){}_pannellumViewer=null;}
+  const c=document.getElementById('pannellumContainer');
+  if(c){c.classList.remove('active');c.innerHTML='';}
+  const img=document.getElementById('lbImg');
+  if(img)img.style.display='';
+}
+// ── Zeichen-Tool ──
+let _drawPointer=null,_drawCtx=null,_drawErasing=false;
+function lbStartDraw(){
+  const img=document.getElementById('lbImg');
+  if(!img||!img.src||img.style.display==='none')return; // kein Zeichnen im 360°-Modus
+  const canvas=document.getElementById('drawCanvas');
+  if(!canvas)return;
+  const rect=img.getBoundingClientRect();
+  canvas.width=rect.width;canvas.height=rect.height;
+  canvas.style.left=rect.left+'px';canvas.style.top=rect.top+'px';
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
+  canvas.style.position='fixed';
+  _drawCtx=canvas.getContext('2d');
+  _drawErasing=false;
+  canvas.classList.add('active');
+  document.getElementById('lbDrawBar').classList.add('visible');
+  canvas.addEventListener('pointerdown',_onDrawDown);
+  canvas.addEventListener('pointermove',_onDrawMove);
+  canvas.addEventListener('pointerup',_onDrawUp);
+  canvas.addEventListener('pointercancel',_onDrawUp);
+}
+function lbToggleEraser(btn){
+  _drawErasing=!_drawErasing;
+  btn.classList.toggle('on',_drawErasing);
+}
+function _onDrawDown(e){
+  e.preventDefault();
+  document.getElementById('drawCanvas').setPointerCapture(e.pointerId);
+  _drawPointer={x:e.offsetX,y:e.offsetY};
+  _drawCtx.beginPath();_drawCtx.moveTo(e.offsetX,e.offsetY);
+}
+function _onDrawMove(e){
+  if(!_drawPointer)return;
+  e.preventDefault();
+  const ctx=_drawCtx;
+  const size=parseInt(document.getElementById('drawSize')?.value||5);
+  if(_drawErasing){
+    ctx.globalCompositeOperation='destination-out';
+    ctx.lineWidth=size*3;
+  }else{
+    ctx.globalCompositeOperation='source-over';
+    ctx.strokeStyle=document.getElementById('drawColor')?.value||'#ff0000';
+    ctx.lineWidth=size;
+  }
+  ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);
+}
+function _onDrawUp(e){_drawPointer=null;}
+function lbDiscardDraw(){
+  _drawPointer=null;_drawErasing=false;
+  const c=document.getElementById('drawCanvas');
+  if(c){
+    c.classList.remove('active');
+    c.removeEventListener('pointerdown',_onDrawDown);
+    c.removeEventListener('pointermove',_onDrawMove);
+    c.removeEventListener('pointerup',_onDrawUp);
+    c.removeEventListener('pointercancel',_onDrawUp);
+    const ctx=c.getContext('2d');if(ctx)ctx.clearRect(0,0,c.width,c.height);
+  }
+  const bar=document.getElementById('lbDrawBar');
+  if(bar)bar.classList.remove('visible');
+}
+async function lbSaveDraw(){
+  const img=document.getElementById('lbImg');
+  const drawCanvas=document.getElementById('drawCanvas');
+  if(!img||!drawCanvas)return;
+  const t=currentTask();
+  if(!t||_lbFotoIdx<0||!t.fotos||!t.fotos[_lbFotoIdx]){toast('Kein Foto gewählt','error');return;}
+  const f=t.fotos[_lbFotoIdx];
+  // Bild + Zeichnung auf neuem Canvas zusammenführen (in Originalauflösung)
+  const mc=document.createElement('canvas');
+  mc.width=img.naturalWidth;mc.height=img.naturalHeight;
+  const mCtx=mc.getContext('2d');
+  mCtx.drawImage(img,0,0,mc.width,mc.height);
+  mCtx.drawImage(drawCanvas,0,0,mc.width,mc.height);
+  const blob=await new Promise(r=>mc.toBlob(r,'image/jpeg',0.92));
+  if(!blob){toast('Fehler beim Erstellen','error');return;}
+  const folderId=extractDriveFolderId(t.gdrive);
+  if(!folderId){toast('Kein Drive-Ordner verknüpft','error');return;}
+  if(!(await ensureToken())){toast('Nicht angemeldet','error');return;}
+  const base=(f.name||'foto.jpg').replace(/\.[^.]+$/,'');
+  const copyName=base+'_zeichnung.jpg';
+  const body=new FormData();
+  body.append('metadata',new Blob([JSON.stringify({name:copyName,parents:[folderId]})],{type:'application/json'}));
+  body.append('file',blob,'blob.jpg');
+  toast('⬆ Zeichnung wird gespeichert…','info');
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {method:'POST',headers:{Authorization:'Bearer '+gdriveToken},body});
+  if(r.ok)toast('✓ Zeichnung in Drive gespeichert','success');
+  else toast('Fehler beim Speichern','error');
+  lbDiscardDraw();
 }
 function _lbShowCaption(txt){
   const lbl=document.getElementById('lbTextViewLabel');
@@ -1671,11 +1824,12 @@ function _updateFotoCaptionBadge(i,txt){
   }else if(badge){badge.remove();}
 }
 function closeLightbox(){
-  // Buttons im Overlay rufen stopPropagation – alles andere schließt das Overlay.
+  _lbClosePannellum();
+  lbDiscardDraw();
   const lb=document.getElementById('lightbox');
   lb.classList.remove('open');
   const img=document.getElementById('lbImg');
-  img.src='';img.onerror=null;img.onload=null;
+  img.src='';img.onerror=null;img.onload=null;img.style.display='';
   _lbCurrentUrl='';
   _lbFotoIdx=-1;
   const bar=document.getElementById('lbTextbar');
