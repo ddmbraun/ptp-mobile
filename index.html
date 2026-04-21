@@ -244,9 +244,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js"></script>
-<!-- Pannellum wird erst bei Bedarf (360°-Foto) geladen -->
-<link rel="stylesheet" id="pannellumCSS" href="" disabled>
+<!-- piexif und pannellum werden erst bei Bedarf geladen -->
 <script>
 /* ═══════════════════════════════════════════════
    PTP Mobile – nutzt dieselbe workboard.json wie PTP
@@ -807,7 +805,8 @@ function renderDetail(t){
       +'<div id="zeitGesamt" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;text-align:center;font-weight:600">'+renderZeitGesamtText(zeiten)+'</div>'
     +'</div></div>'
     // ── NOTIZEN ──
-    +'<div class="sect open" data-sect="Notizen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📝 Notizen</div><div class="sect-body">'
+    +((_mOpenSections['Notizen']===undefined)&&(_mOpenSections['Notizen']=true),'')
+    +'<div class="sect'+oc('Notizen')+'" data-sect="Notizen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📝 Notizen</div><div class="sect-body">'
       +'<div class="field"><label>Dauerhafte Notiz</label><textarea rows="3" style="resize:none;transition:height .2s" placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)" onfocus="this.rows=8" onblur="if(!this.value)this.rows=3;else this.rows=4">'+esc(t.desc||'')+'</textarea></div>'
       +'<div class="field"><label>Chronologische Einträge</label><div id="notizList">'+renderNotizen(notizVerlauf)+'</div>'
       +'<div class="field-row" style="margin-top:6px"><input type="text" id="newNotizInput" placeholder="Kurze Notiz mit Zeitstempel…"><button class="inline-btn primary" onclick="addNotiz()">+</button></div></div>'
@@ -1486,6 +1485,13 @@ window.addEventListener('pagehide',()=>{if(dirty){saveFile();}});
 
 <!-- ══ EXIF HELPER ══ -->
 <script>
+function _loadPiexif(cb){
+  if(window.piexif){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js';
+  s.onload=cb;s.onerror=()=>{};
+  document.head.appendChild(s);
+}
 function embedExifCaption(dataUrl,caption){
   try{
     if(!window.piexif)return dataUrl;
@@ -1499,7 +1505,9 @@ function embedExifCaption(dataUrl,caption){
   }catch(e){console.warn('EXIF:',e);return dataUrl;}
 }
 async function _embedExifInDrive(driveId,caption){
-  if(!driveId||!caption||!window.piexif)return;
+  if(!driveId||!caption)return;
+  if(!window.piexif)await new Promise(r=>_loadPiexif(r));
+  if(!window.piexif)return;
   // Foto aus Drive laden
   const blobUrl=await _fetchFotoBlob(driveId);
   if(!blobUrl)return;
@@ -1533,9 +1541,12 @@ async function _embedExifInDrive(driveId,caption){
   <div class="lb-draw-bar" id="lbDrawBar" onclick="event.stopPropagation()">
     <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000" title="Farbe">
     <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5" title="Stärke">
-    <button class="lb-draw-btn" id="drawEraserBtn" onclick="event.stopPropagation();lbToggleEraser(this)">⬜ Radierer</button>
-    <button class="lb-draw-btn save" onclick="event.stopPropagation();lbSaveDraw()">💾 Speichern</button>
-    <button class="lb-draw-btn discard" onclick="event.stopPropagation();lbDiscardDraw()">✕ Verwerfen</button>
+    <button class="lb-draw-btn on" id="drawModePen"  onclick="event.stopPropagation();lbSetMode('pen',this)">✏️</button>
+    <button class="lb-draw-btn"    id="drawModeRect" onclick="event.stopPropagation();lbSetMode('rect',this)">▭</button>
+    <button class="lb-draw-btn"    id="drawModeCirc" onclick="event.stopPropagation();lbSetMode('circ',this)">◯</button>
+    <button class="lb-draw-btn"    id="drawEraserBtn" onclick="event.stopPropagation();lbSetMode('erase',this)">⬜</button>
+    <button class="lb-draw-btn save"    onclick="event.stopPropagation();lbSaveDraw()">💾</button>
+    <button class="lb-draw-btn discard" onclick="event.stopPropagation();lbDiscardDraw()">✕</button>
   </div>
   <button class="lb-close" onclick="event.stopPropagation();closeLightbox()" aria-label="Schließen">✕</button>
   <div class="lb-textbar" id="lbTextbar" onclick="event.stopPropagation()">
@@ -1630,7 +1641,12 @@ function _lbClosePannellum(){
   if(img)img.style.display='';
 }
 // ── Zeichen-Tool ──
-let _drawPointer=null,_drawCtx=null,_drawErasing=false;
+let _drawPointer=null,_drawCtx=null,_drawErasing=false,_drawMode='pen',_drawSnapshot=null;
+function lbSetMode(mode,btn){
+  _drawMode=mode;_drawErasing=(mode==='erase');
+  document.querySelectorAll('#lbDrawBar .lb-draw-btn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+}
 function lbStartDraw(){
   const img=document.getElementById('lbImg');
   if(!img||!img.src||img.style.display==='none')return;
@@ -1653,34 +1669,54 @@ function lbStartDraw(){
   canvas.addEventListener('pointerup',_onDrawUp);
   canvas.addEventListener('pointercancel',_onDrawUp);
 }
-function lbToggleEraser(btn){
-  _drawErasing=!_drawErasing;
-  btn.classList.toggle('on',_drawErasing);
-}
 function _onDrawDown(e){
   e.preventDefault();
   document.getElementById('drawCanvas').setPointerCapture(e.pointerId);
   _drawPointer={x:e.offsetX,y:e.offsetY};
-  _drawCtx.beginPath();_drawCtx.moveTo(e.offsetX,e.offsetY);
+  if(_drawMode==='rect'||_drawMode==='circ'){
+    // Snapshot für Vorschau merken
+    _drawSnapshot=_drawCtx.getImageData(0,0,_drawCtx.canvas.width,_drawCtx.canvas.height);
+  }else{
+    _drawCtx.beginPath();_drawCtx.moveTo(e.offsetX,e.offsetY);
+  }
 }
 function _onDrawMove(e){
   if(!_drawPointer)return;
   e.preventDefault();
   const ctx=_drawCtx;
   const size=parseInt(document.getElementById('drawSize')?.value||5);
-  if(_drawErasing){
+  const color=document.getElementById('drawColor')?.value||'#ff0000';
+  if(_drawMode==='erase'){
     ctx.globalCompositeOperation='destination-out';
-    ctx.lineWidth=size*3;
+    ctx.lineWidth=size*3;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);
+  }else if(_drawMode==='rect'||_drawMode==='circ'){
+    // Snapshot wiederherstellen, dann Vorschau zeichnen
+    if(_drawSnapshot)ctx.putImageData(_drawSnapshot,0,0);
+    ctx.globalCompositeOperation='source-over';
+    ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='square';
+    const x0=_drawPointer.x,y0=_drawPointer.y;
+    const x1=e.offsetX,y1=e.offsetY;
+    ctx.beginPath();
+    if(_drawMode==='rect'){
+      ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+    }else{
+      const rx=Math.abs(x1-x0)/2,ry=Math.abs(y1-y0)/2;
+      ctx.ellipse(x0+(x1-x0)/2,y0+(y1-y0)/2,rx,ry,0,0,2*Math.PI);
+      ctx.stroke();
+    }
   }else{
     ctx.globalCompositeOperation='source-over';
-    ctx.strokeStyle=document.getElementById('drawColor')?.value||'#ff0000';
-    ctx.lineWidth=size;
+    ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);
   }
-  ctx.lineCap='round';ctx.lineJoin='round';
-  ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);
 }
-function _onDrawUp(e){_drawPointer=null;}
+function _onDrawUp(e){
+  if(_drawMode==='rect'||_drawMode==='circ')_drawSnapshot=null;
+  _drawPointer=null;
+}
 function lbDiscardDraw(){
   _drawPointer=null;_drawErasing=false;
   const c=document.getElementById('drawCanvas');
