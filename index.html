@@ -329,7 +329,7 @@ function applyStoredSizeBarVisibility(){
 function gdriveLogin(){
   initTokenClient();
   if(!gdriveTokenClient){document.getElementById('loginStatus').textContent='Google-Dienst noch nicht geladen, bitte kurz warten…';return;}
-  gdriveTokenClient.requestAccessToken({prompt:'consent'});
+  gdriveTokenClient.requestAccessToken({prompt:''});
 }
 function initTokenClient(){
   if(gdriveTokenClient)return;
@@ -370,7 +370,7 @@ function silentRefresh(){
         resolve(true);
       }else resolve(false);
     };
-    try{gdriveTokenClient.requestAccessToken({prompt:''});}catch(e){resolve(false);}
+    try{gdriveTokenClient.requestAccessToken({prompt:'none'});}catch(e){resolve(false);}
   });
 }
 async function ensureToken(){
@@ -1427,7 +1427,7 @@ window.addEventListener('load',async()=>{
     }
   }catch(e){}
   // GIS initialisieren, dann silent refresh versuchen
-  setTimeout(async()=>{
+  const tryAutoConnect = async () => {
     initTokenClient();
     const stored=JSON.parse(localStorage.getItem(TOKEN_KEY)||'null');
     if(stored&&stored.token){
@@ -1436,7 +1436,16 @@ window.addEventListener('load',async()=>{
       if(ok){afterLogin();return;}
     }
     document.getElementById('loginStatus').textContent='';
-  },800);
+  };
+  // Erst nach 1,5s versuchen (Mobilgeräte brauchen länger zum Laden von Google)
+  setTimeout(async()=>{
+    if(window.google&&window.google.accounts){
+      await tryAutoConnect();
+    } else {
+      // Google noch nicht geladen – nochmal nach 2s versuchen
+      setTimeout(tryAutoConnect, 2000);
+    }
+  },1500);
 });
 
 // Auto-Speichern beim Schließen
