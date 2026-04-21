@@ -42,7 +42,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .status-chip:active{transform:scale(.96)}
 .status-chip.active{background:var(--bg2);border-color:var(--orange);color:var(--orange);font-weight:600}
 .search-bar{padding:10px 12px;background:var(--bg2);border-bottom:1px solid var(--border)}
-.search-bar input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:15px}
+.search-bar{position:relative}
+.search-bar input{width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 36px 10px 12px;border-radius:8px;font-size:15px}
+.search-clear{position:absolute;right:20px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px;line-height:1;display:none}
 .task-list{flex:1;overflow-y:auto;padding:8px 10px 80px;-webkit-overflow-scrolling:touch}
 .task-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background .15s}
 .task-card:active{background:var(--bg3)}
@@ -180,7 +182,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
     <div class="board-bar" id="statusBar"></div>
   </div>
   <div class="search-bar">
-    <input type="search" id="searchInput" placeholder="🔍 Suche Titel, Kostenstelle, Adresse…" oninput="renderList()">
+    <input type="text" id="searchInput" placeholder="🔍 Suche Titel, Kostenstelle, Adresse…" oninput="renderList();document.getElementById('searchClear').style.display=this.value?'block':'none'" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="search-clear" id="searchClear" onclick="document.getElementById('searchInput').value='';this.style.display='none';renderList()">✕</button>
   </div>
   <div class="task-list" id="taskList"></div>
   <button class="fab" onclick="newTask()">+</button>
@@ -668,16 +671,22 @@ function renderStatusBar(){
 function renderList(){
   renderBoardBar();
   renderStatusBar();
-  const q=(document.getElementById('searchInput')?.value||'').toLowerCase();
+  const rawQ=(document.getElementById('searchInput')?.value||'');
+  // Normierung: Kleinbuchstaben + Umlaute vereinfachen (ae/oe/ue/ss)
+  const _norm=s=>String(s||'').toLowerCase()
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss');
+  const qWords=_norm(rawQ).split(/\s+/).filter(Boolean);
   const list=document.getElementById('taskList');
   const tasks=boards[currentBoard]||[];
   // Status-Filter
   let filtered=currentStatus?tasks.filter(t=>(t.status||'')===currentStatus):tasks;
-  // Suche
-  if(q)filtered=filtered.filter(t=>{
-    const hay=[t.title,t.adresse,t.hausverwaltung,t.schadensbild,(t.tags||[]).join(' '),(t.kontakte||[]).map(k=>k.name).join(' ')].join(' ').toLowerCase();
-    return hay.includes(q);
-  });
+  // Suche: alle Wörter müssen irgendwo auftauchen (Groß-/Kleinschreibung egal)
+  if(qWords.length){
+    filtered=filtered.filter(t=>{
+      const hay=_norm([t.title,t.adresse,t.hausverwaltung,t.schadensbild,(t.tags||[]).join(' '),(t.kontakte||[]).map(k=>k.name).join(' ')].join(' '));
+      return qWords.every(w=>hay.includes(w));
+    });
+  }
   if(!filtered.length){
     const hint=currentStatus?'Keine Tasks in „'+esc(currentStatus)+'"':(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.');
     list.innerHTML='<div class="empty">'+hint+'</div>';return;
@@ -1585,14 +1594,72 @@ async function lbSaveCaption(){
   document.getElementById('lbTextbar').classList.remove('editing');
   try{_updateFotoCaptionBadge(_lbFotoIdx,val);}catch(e){}
   toast('✓ Beschreibung gespeichert','success');
-  // EXIF asynchron in Drive-Datei einbetten (nur JPEG)
-  if(val && f.driveId && (f.mimeType==='image/jpeg'||f.mimeType==='image/jpg'||f.mimeType==='image/jpeg')){
+  // EXIF + Textkopie asynchron (nur JPEG, nur wenn Text vorhanden)
+  if(val && f.driveId && (f.mimeType==='image/jpeg'||f.mimeType==='image/jpg')){
     try{
       if(!(await ensureToken()))return;
+      // 1) EXIF in Original einbetten
       await _embedExifInDrive(f.driveId,val);
-      toast('✓ EXIF gespeichert','success');
-    }catch(e){console.warn('EXIF-Upload:',e);}
+      toast('✓ EXIF im Original gespeichert','success');
+      // 2) Textkopie mit eingebranntem Text erstellen
+      const folderId=extractDriveFolderId(t.gdrive);
+      if(folderId){
+        await _uploadTextCopyToDrive(f,val,folderId);
+        toast('✓ Textkopie in Drive erstellt','success');
+      }
+    }catch(e){console.warn('EXIF/Textkopie-Upload:',e);}
   }
+}
+// ── Text visuell ins Bild einbrennen und als Kopie hochladen ──
+async function _uploadTextCopyToDrive(foto,text,folderId){
+  // Original-Blob aus Drive laden
+  const blobUrl=await _fetchFotoBlob(foto.driveId);
+  if(!blobUrl)return;
+  const origBlob=await fetch(blobUrl).then(r=>r.blob());
+  // Auf Canvas zeichnen + Text einbrennen
+  const textBlob=await _burnTextOntoBlob(origBlob,text);
+  if(!textBlob)return;
+  // Dateiname: Originalname + _text
+  const origName=foto.name||'foto.jpg';
+  const ext=origName.match(/\.[^.]+$/)?.[0]||'.jpg';
+  const base=origName.replace(/\.[^.]+$/,'');
+  const copyName=base+'_text'+ext;
+  // In Drive hochladen (neue Datei)
+  const metadata={name:copyName,parents:[folderId],description:'Textkopie: '+text};
+  const body=new FormData();
+  body.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+  body.append('file',textBlob,'blob.jpg');
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {method:'POST',headers:{Authorization:'Bearer '+gdriveToken},body});
+}
+// ── Canvas: Text als Balken unten ins Bild einbrennen ──
+function _burnTextOntoBlob(srcBlob,text){
+  return new Promise(resolve=>{
+    const img=new Image();
+    const url=URL.createObjectURL(srcBlob);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const W=img.naturalWidth,H=img.naturalHeight;
+      const canvas=document.createElement('canvas');
+      canvas.width=W;canvas.height=H;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0);
+      const fs=Math.max(18,Math.round(W/28));
+      ctx.font='bold '+fs+'px Arial,sans-serif';
+      const pad=Math.round(fs*0.5);
+      const barH=fs+pad*2;
+      // Halbtransparenter schwarzer Balken unten
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.fillRect(0,H-barH,W,barH);
+      // Weißer Text
+      ctx.fillStyle='#ffffff';
+      ctx.textBaseline='middle';
+      ctx.fillText(text,pad,H-barH/2,W-pad*2);
+      canvas.toBlob(b=>resolve(b),'image/jpeg',0.92);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);};
+    img.src=url;
+  });
 }
 function _updateFotoCaptionBadge(i,txt){
   const thumb=document.querySelectorAll('#fotoGrid .foto-thumb')[i];
