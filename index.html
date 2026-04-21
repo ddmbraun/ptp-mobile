@@ -144,14 +144,15 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 #drawCanvas{display:none;position:absolute;inset:0;cursor:crosshair;touch-action:none;z-index:20;}
 #drawCanvas.active{display:block;}
 /* ── Zeichen-Toolbar ── */
-.lb-draw-bar{position:absolute;top:calc(env(safe-area-inset-top,0) + 60px);left:0;right:0;display:none;justify-content:center;flex-wrap:wrap;gap:6px;align-items:center;z-index:10003;padding:0 10px;}
+.lb-draw-bar{position:absolute;top:calc(env(safe-area-inset-top,0) + 56px);left:50%;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;gap:5px;z-index:10003;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:8px 10px;}
 .lb-draw-bar.visible{display:flex;}
-.lb-draw-color{width:34px;height:34px;border:2px solid rgba(255,255,255,.5);border-radius:8px;cursor:pointer;padding:2px;background:none;}
-.lb-draw-size{width:65px;accent-color:#6a8aff;}
-.lb-draw-btn{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.3);color:#fff;padding:7px 11px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.lb-draw-row{display:flex;gap:5px;align-items:center;}
+.lb-draw-color{width:30px;height:30px;border:2px solid rgba(255,255,255,.5);border-radius:6px;cursor:pointer;padding:1px;background:none;}
+.lb-draw-size{width:70px;accent-color:#6a8aff;}
+.lb-draw-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;width:34px;height:34px;border-radius:8px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .lb-draw-btn.on{background:rgba(106,138,255,.7);border-color:#6a8aff;}
-.lb-draw-btn.save{background:rgba(74,222,128,.25);border-color:#4ade80;color:#4ade80;}
-.lb-draw-btn.discard{background:rgba(248,113,113,.2);border-color:#f87171;color:#f87171;}
+.lb-draw-btn.save{background:rgba(74,222,128,.25);border-color:#4ade80;color:#4ade80;width:auto;padding:0 12px;font-size:13px;}
+.lb-draw-btn.discard{background:rgba(248,113,113,.2);border-color:#f87171;color:#f87171;width:auto;padding:0 10px;font-size:13px;}
 /* Beschreibung unter dem Grid-Thumbnail */
 .foto-thumb .cap-badge{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1.2;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
 .foto-placeholder{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text2)}
@@ -276,11 +277,11 @@ function esc(s){const d=document.createElement('div');d.textContent=s==null?'':s
 function escAttr(s){return String(s==null?'':s).replace(/"/g,'&quot;').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 // Offen-Zustand der Detail-Sektionen über Re-Renders hinweg merken.
 // Per-Task, damit beim Wechsel zwischen Tasks der Zustand sauber zurückgesetzt wird.
-let _mOpenSections={'Stammdaten':true};
+let _mOpenSections={'Stammdaten':true,'Notizen':true};
 let _mOpenSectionsForTask=null;
 function _resetOpenSectionsForTask(taskId){
   if(_mOpenSectionsForTask!==taskId){
-    _mOpenSections={'Stammdaten':true};
+    _mOpenSections={'Stammdaten':true,'Notizen':true};
     _mOpenSectionsForTask=taskId;
   }
 }
@@ -746,7 +747,7 @@ async function closeDetail(){
   }
   currentTaskId=null;
   // Sektionen beim Zurückgehen zuklappen — beim nächsten Öffnen beginnen alle frisch
-  _mOpenSections={'Stammdaten':true};
+  _mOpenSections={'Stammdaten':true,'Notizen':true};
   _mOpenSectionsForTask=null;
   _stopTickLoop();
   document.getElementById('detailScreen').classList.add('hidden');
@@ -805,7 +806,6 @@ function renderDetail(t){
       +'<div id="zeitGesamt" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;text-align:center;font-weight:600">'+renderZeitGesamtText(zeiten)+'</div>'
     +'</div></div>'
     // ── NOTIZEN ──
-    +((_mOpenSections['Notizen']===undefined)&&(_mOpenSections['Notizen']=true),'')
     +'<div class="sect'+oc('Notizen')+'" data-sect="Notizen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📝 Notizen</div><div class="sect-body">'
       +'<div class="field"><label>Dauerhafte Notiz</label><textarea rows="3" style="resize:none;transition:height .2s" placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)" onfocus="this.rows=8" onblur="if(!this.value)this.rows=3;else this.rows=4">'+esc(t.desc||'')+'</textarea></div>'
       +'<div class="field"><label>Chronologische Einträge</label><div id="notizList">'+renderNotizen(notizVerlauf)+'</div>'
@@ -1539,14 +1539,18 @@ async function _embedExifInDrive(driveId,caption){
   <canvas id="drawCanvas"></canvas>
   <!-- Zeichen-Toolbar -->
   <div class="lb-draw-bar" id="lbDrawBar" onclick="event.stopPropagation()">
-    <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000" title="Farbe">
-    <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5" title="Stärke">
-    <button class="lb-draw-btn on" id="drawModePen"  onclick="event.stopPropagation();lbSetMode('pen',this)">✏️</button>
-    <button class="lb-draw-btn"    id="drawModeRect" onclick="event.stopPropagation();lbSetMode('rect',this)">▭</button>
-    <button class="lb-draw-btn"    id="drawModeCirc" onclick="event.stopPropagation();lbSetMode('circ',this)">◯</button>
-    <button class="lb-draw-btn"    id="drawEraserBtn" onclick="event.stopPropagation();lbSetMode('erase',this)">⬜</button>
-    <button class="lb-draw-btn save"    onclick="event.stopPropagation();lbSaveDraw()">💾</button>
-    <button class="lb-draw-btn discard" onclick="event.stopPropagation();lbDiscardDraw()">✕</button>
+    <div class="lb-draw-row">
+      <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000">
+      <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5">
+      <button class="lb-draw-btn on" id="drawModePen"  onclick="event.stopPropagation();lbSetMode('pen',this)" title="Stift">✏️</button>
+      <button class="lb-draw-btn"    id="drawModeRect" onclick="event.stopPropagation();lbSetMode('rect',this)" title="Rechteck">▭</button>
+      <button class="lb-draw-btn"    id="drawModeCirc" onclick="event.stopPropagation();lbSetMode('circ',this)" title="Kreis">◯</button>
+      <button class="lb-draw-btn"    id="drawEraserBtn" onclick="event.stopPropagation();lbSetMode('erase',this)" title="Radierer">⬜</button>
+    </div>
+    <div class="lb-draw-row">
+      <button class="lb-draw-btn save"    onclick="event.stopPropagation();lbSaveDraw()">💾 Speichern</button>
+      <button class="lb-draw-btn discard" onclick="event.stopPropagation();lbDiscardDraw()">✕ Verwerfen</button>
+    </div>
   </div>
   <button class="lb-close" onclick="event.stopPropagation();closeLightbox()" aria-label="Schließen">✕</button>
   <div class="lb-textbar" id="lbTextbar" onclick="event.stopPropagation()">
