@@ -781,10 +781,21 @@ function renderDetail(t){
       +'<div id="zeitGesamt" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;text-align:center;font-weight:600">'+renderZeitGesamtText(zeiten)+'</div>'
     +'</div></div>'
     // ── NOTIZEN ──
-    +'<div class="sect'+oc('Notizen')+'" data-sect="Notizen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📝 Notizen</div><div class="sect-body">'
-      +'<div class="field"><label>Dauerhafte Notiz</label><textarea placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)">'+esc(t.desc||'')+'</textarea></div>'
+    +'<div class="sect open" data-sect="Notizen"><div class="sect-head">📝 Notizen</div><div class="sect-body">'
+      +'<div class="field"><label>Dauerhafte Notiz</label><textarea rows="3" style="resize:none;transition:height .2s" placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)" onfocus="this.rows=8" onblur="if(!this.value)this.rows=3;else this.rows=4">'+esc(t.desc||'')+'</textarea></div>'
       +'<div class="field"><label>Chronologische Einträge</label><div id="notizList">'+renderNotizen(notizVerlauf)+'</div>'
       +'<div class="field-row" style="margin-top:6px"><input type="text" id="newNotizInput" placeholder="Kurze Notiz mit Zeitstempel…"><button class="inline-btn primary" onclick="addNotiz()">+</button></div></div>'
+    +'</div></div>'
+    // ── VERKNÜPFUNGEN ──
+    +'<div class="sect'+oc('Verknuepfungen')+'" data-sect="Verknuepfungen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">🔗 Verknüpfungen</div><div class="sect-body">'
+      +'<div class="field"><label>Google Drive – Ordner</label>'
+        +'<div class="field-row" style="gap:6px">'
+          +'<input type="url" value="'+escAttr(t.gdrive||'')+'" placeholder="https://drive.google.com/drive/folders/…" oninput="updateField(\'gdrive\',this.value)" style="flex:1">'
+          +(extractDriveFolderId(t.gdrive)
+            ? '<a class="nav-link" href="'+escAttr(t.gdrive||'')+'" target="_blank" style="padding:10px 12px;font-size:13px">📁</a>'
+            : '<span class="nav-link disabled" style="padding:10px 12px;font-size:13px;pointer-events:none">📁</span>')
+        +'</div>'
+      +'</div>'
     +'</div></div>'
     // ── FOTOS & ANHÄNGE ──
     +'<div class="sect'+oc('Fotos')+'" data-sect="Fotos"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📷 Fotos & Anhänge ('+medienCount+')</div><div class="sect-body">'
@@ -797,15 +808,9 @@ function renderDetail(t){
             +'<button class="add-btn" style="flex:1" onclick="document.getElementById(\'fotoInputCamera\').click()">📷 Neues Foto</button>'
             +'<button class="add-btn" style="flex:1" onclick="document.getElementById(\'fotoInputGallery\').click()">🖼️ Aus Galerie</button>'
           +'</div>'
-        : '<div style="font-size:12px;color:var(--red);margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--red)">⚠ Zum Foto-Upload zuerst einen Drive-Ordner-Link unten eintragen.</div>')
+        : '<div style="font-size:12px;color:var(--red);margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--red)">⚠ Zum Foto-Upload zuerst einen Drive-Ordner-Link unter Verknüpfungen eintragen.</div>')
       +'<input type="file" id="fotoInputCamera" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
       +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
-      +'<div class="field" style="margin-top:8px"><label>Drive-Ordner für Fotos</label><input type="text" value="'+escAttr(t.gdrive||'')+'" placeholder="Google Drive-Ordner-Link" oninput="updateField(\'gdrive\',this.value)"></div>'
-    +'</div></div>'
-    // ── ABSCHLUSSAKTE ──
-    +'<div class="sect'+oc('Abschluss')+'" data-sect="Abschluss"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📁 Abschlussakte</div><div class="sect-body">'
-      +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Erstellt einen Unterordner „Abschlussakte" im Drive-Foto-Ordner mit Auftragsakte.txt und Fotoliste.</div>'
-      +'<button class="inline-btn primary" style="width:100%" id="abschlussBtn" onclick="createAbschlussakteMobile()">📁 Abschlussakte erstellen</button>'
     +'</div></div>'
     // ── LÖSCHEN ──
     +'<div class="sect'+oc('Löschen')+'" data-sect="Löschen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">⚠ Task löschen</div><div class="sect-body">'
