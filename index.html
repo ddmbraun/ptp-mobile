@@ -172,6 +172,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--text);padding:12px 20px;border-radius:10px;border:1px solid var(--border);z-index:100;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
 .toast.success{border-color:var(--green);color:var(--green)}
 .toast.error{border-color:var(--red);color:var(--red)}
+.toast.info{background:#1a73e8;color:#fff;border-color:#1a73e8}
 .hide{display:none!important}
 </style>
 </head>
@@ -259,6 +260,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<link id="pannellumCSS" rel="stylesheet">
 <!-- piexif und pannellum werden erst bei Bedarf geladen -->
 <script>
 /* ═══════════════════════════════════════════════
@@ -323,7 +325,7 @@ function toggleMSect(el){
   if(key){_mOpenSections[key]=el.classList.contains('open');}
 }
 function generateId(){return 't_'+Date.now()+'_'+Math.random().toString(36).substr(2,6);}
-function toast(msg,kind){const t=document.createElement('div');t.className='toast'+(kind?' '+kind:'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
+function toast(msg,kind){const t=document.createElement('div');t.className='toast'+(kind?' '+kind:'');t.textContent=msg;document.body.appendChild(t);setTimeout(()=>{try{t.remove();}catch(e){console.warn('[PTP-Mobile]',e);}},2500);}
 function parseMinutes(von,bis){try{if(!von||!bis)return 0;const[vh,vm]=von.split(':').map(Number);const[bh,bm]=bis.split(':').map(Number);const d=(bh*60+bm)-(vh*60+vm);return d>0?d:0;}catch(e){return 0;}}
 
 // ── GRÖSSEN-SLIDER (wie im Desktop-Modal) ──
@@ -335,11 +337,11 @@ function setMobileScale(pct){
   if(body)body.style.setProperty('--m-scale',(v/100).toFixed(2));
   const lbl=document.getElementById('mSizeVal');if(lbl)lbl.textContent=v+'%';
   const sl=document.getElementById('mSizeSlider');if(sl&&String(sl.value)!==String(v))sl.value=String(v);
-  try{localStorage.setItem(MSCALE_KEY,String(v));}catch(e){}
+  try{localStorage.setItem(MSCALE_KEY,String(v));}catch(e){console.warn('[PTP-Mobile]',e);}
 }
 function applyStoredMobileScale(){
   let v=100;
-  try{const s=localStorage.getItem(MSCALE_KEY);if(s)v=parseInt(s,10)||100;}catch(e){}
+  try{const s=localStorage.getItem(MSCALE_KEY);if(s)v=parseInt(s,10)||100;}catch(e){console.warn('[PTP-Mobile]',e);}
   setMobileScale(v);
 }
 function toggleMSizeBar(){
@@ -347,7 +349,7 @@ function toggleMSizeBar(){
   if(!bar)return;
   const open=!bar.classList.contains('open');
   bar.classList.toggle('open',open);
-  try{localStorage.setItem(MSIZEBAR_KEY,open?'1':'0');}catch(e){}
+  try{localStorage.setItem(MSIZEBAR_KEY,open?'1':'0');}catch(e){console.warn('[PTP-Mobile]',e);}
   if(open)applyStoredMobileScale();
 }
 function applyStoredSizeBarVisibility(){
@@ -355,7 +357,7 @@ function applyStoredSizeBarVisibility(){
     const open=localStorage.getItem(MSIZEBAR_KEY)==='1';
     const bar=document.getElementById('mSizeBar');
     if(bar)bar.classList.toggle('open',open);
-  }catch(e){}
+  }catch(e){console.warn('[PTP-Mobile]',e);}
 }
 
 // ══ AUTH ══
@@ -377,7 +379,7 @@ function onTokenResponse(resp){
   if(resp.error){document.getElementById('loginStatus').textContent='Fehler: '+resp.error;return;}
   gdriveToken=resp.access_token;
   gdriveTokenExpires=Date.now()+(Number(resp.expires_in||3600)-60)*1000;
-  try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){}
+  try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){console.warn('[PTP-Mobile]',e);}
   afterLogin();
 }
 async function afterLogin(){
@@ -385,7 +387,7 @@ async function afterLogin(){
   try{
     const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+gdriveToken}});
     if(r.ok){const j=await r.json();userEmail=j.email||'';}
-  }catch(e){}
+  }catch(e){console.warn('[PTP-Mobile]',e);}
   await findOrPickFile();
 }
 function tokenValid(){return gdriveToken&&Date.now()<gdriveTokenExpires;}
@@ -403,7 +405,7 @@ function silentRefresh(){
         resolve(true);
       }else resolve(false);
     };
-    try{gdriveTokenClient.requestAccessToken({prompt:'none'});}catch(e){resolve(false);}
+    try{gdriveTokenClient.requestAccessToken({prompt:'none'});}catch(e){console.warn('[PTP-Mobile]',e);resolve(false);}
   });
 }
 async function ensureToken(){
@@ -414,8 +416,9 @@ async function ensureToken(){
 }
 function logout(){
   try{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(FILE_KEY);}catch(e){}
+  const tokenToRevoke=gdriveToken;
   gdriveToken=null;gdriveTokenExpires=0;fileId=null;boards={};statuses=[];
-  try{if(window.google&&google.accounts&&google.accounts.oauth2&&gdriveToken)google.accounts.oauth2.revoke(gdriveToken,()=>{});}catch(e){}
+  try{if(window.google&&google.accounts&&google.accounts.oauth2&&tokenToRevoke)google.accounts.oauth2.revoke(tokenToRevoke,()=>{});}catch(e){}
   showLogin('Abgemeldet');
 }
 function showLogin(msg){
@@ -447,22 +450,22 @@ async function _reconnectToNewFile(){
     const found=await _searchWorkboardInDrive();
     if(found&&found.id&&found.id!==fileId){
       fileId=found.id;fileName=found.name||'workboard.json';
-      try{localStorage.setItem(FILE_KEY,JSON.stringify({id:fileId,name:fileName}));}catch(e){}
+      try{localStorage.setItem(FILE_KEY,JSON.stringify({id:fileId,name:fileName}));}catch(e){console.warn('[PTP-Mobile]',e);}
       const ok=await loadFile();
       if(ok){renderList();toast('↻ Neue workboard.json verbunden','success');}
     }
-  }catch(e){}
+  }catch(e){console.warn('[PTP-Mobile]',e);}
 }
 async function findOrPickFile(){
   document.getElementById('loginStatus').textContent='Suche workboard.json in Drive…';
   // Aus localStorage
-  try{const c=JSON.parse(localStorage.getItem(FILE_KEY)||'null');if(c&&c.id){fileId=c.id;fileName=c.name||'workboard.json';const ok=await loadFile();if(ok){showList();renderList();return;}}}catch(e){}
+  try{const c=JSON.parse(localStorage.getItem(FILE_KEY)||'null');if(c&&c.id){fileId=c.id;fileName=c.name||'workboard.json';const ok=await loadFile();if(ok){showList();renderList();return;}}}catch(e){console.warn('[PTP-Mobile]',e);}
   // Auf Drive suchen
   try{
     const found=await _searchWorkboardInDrive();
     if(!found){document.getElementById('loginStatus').textContent='Keine workboard.json gefunden — erst in PTP am Desktop anlegen.';return;}
     fileId=found.id;fileName=found.name||'workboard.json';
-    try{localStorage.setItem(FILE_KEY,JSON.stringify({id:fileId,name:fileName}));}catch(e){}
+    try{localStorage.setItem(FILE_KEY,JSON.stringify({id:fileId,name:fileName}));}catch(e){console.warn('[PTP-Mobile]',e);}
     const ok=await loadFile();
     if(ok){showList();renderList();}
   }catch(e){document.getElementById('loginStatus').textContent='Drive-Fehler: '+e.message;}
@@ -483,6 +486,8 @@ function _applyMobileFilter(data){
     else boards[k]=v;
   }
 }
+// ── POLLING: fremde Änderungen (z.B. vom Desktop) übernehmen ──
+let fileLastModified=null;
 async function loadFile(){
   if(!fileId)return false;
   if(!(await ensureToken()))return false;
@@ -499,14 +504,11 @@ async function loadFile(){
       const mr=await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?fields=modifiedTime&_='+Date.now(),
         {headers:{Authorization:'Bearer '+gdriveToken},cache:'no-store'});
       if(mr.ok){const meta=await mr.json();fileLastModified=meta.modifiedTime||fileLastModified;}
-    }catch(e){}
+    }catch(e){console.warn('[PTP-Mobile]',e);}
     startPolling();
     return true;
   }catch(e){toast('Laden fehlgeschlagen: '+e.message,'error');return false;}
 }
-
-// ── POLLING: fremde Änderungen (z.B. vom Desktop) übernehmen ──
-let fileLastModified=null;
 let pollTimer=null;
 async function pollForChanges(){
   if(!fileId||!gdriveToken)return;
@@ -539,7 +541,7 @@ async function pollForChanges(){
     if(currentTaskId){const t=findTaskById(currentTaskId);if(t)renderDetail(t);else closeDetail();}
     else renderList();
     toast('↻ Vom Desktop aktualisiert','success');
-  }catch(e){}
+  }catch(e){console.warn('[PTP-Mobile]',e);}
 }
 function startPolling(){
   if(pollTimer)clearInterval(pollTimer);
@@ -631,7 +633,7 @@ async function saveFile(){
           }
         }
       }
-    }catch(e){/* Konflikt-Check best-effort */}
+    }catch(e){console.warn('[PTP-Mobile] Konflikt-Check:',e);}
     // Save-Objekt: Whitelist + Desktop-Spalten (_boardStatuses) erhalten, versteckte Boards durchreichen
     const obj={_statuses:statuses};
     if(Object.keys(_remoteBoardStatuses||{}).length)obj._boardStatuses={..._remoteBoardStatuses};
@@ -642,7 +644,7 @@ async function saveFile(){
     const r=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media&fields=modifiedTime',
       {method:'PATCH',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},body:content});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    try{const rm=await r.json();if(rm&&rm.modifiedTime)fileLastModified=rm.modifiedTime;}catch(e){}
+    try{const rm=await r.json();if(rm&&rm.modifiedTime)fileLastModified=rm.modifiedTime;}catch(e){console.warn('[PTP-Mobile]',e);}
     setSaveInd('saved','✓ Gespeichert');
     dirty=false;
     _saveRetryCount=0;
@@ -742,7 +744,7 @@ function renderList(){
     });
   }
   if(!filtered.length){
-    const hint=currentStatus?'Keine Tasks in „'+esc(currentStatus)+'"':(q?'Keine Treffer für „'+esc(q)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.');
+    const hint=currentStatus?'Keine Tasks in „'+esc(currentStatus)+'"':(rawQ?'Keine Treffer für „'+esc(rawQ)+'"':'Noch keine Tasks in diesem Board.<br>Rechts unten „+" tippen.');
     list.innerHTML='<div class="empty">'+hint+'</div>';return;
   }
   const timerState=_loadTimerState();
@@ -1042,8 +1044,8 @@ function toggleMobileTimer(taskId){
         const open=other.timeEntries.find(e=>!e.end);
         if(open)open.end=endMs;else other.timeEntries.push({start:startMs,end:endMs});
         const d1=new Date(startMs),d2=new Date(endMs);const pad=n=>String(n).padStart(2,'0');
-        if(!other.zeitEntries)other.zeitEntries=[];
-        other.zeitEntries.push({date:d1.toISOString().split('T')[0],von:pad(d1.getHours())+':'+pad(d1.getMinutes()),bis:pad(d2.getHours())+':'+pad(d2.getMinutes()),beschreibung:'Stoppuhr (Mobile, auto-gestoppt)'});
+        if(!other.timeEntries)other.timeEntries=[];
+        other.timeEntries.push({date:d1.toISOString().split('T')[0],von:pad(d1.getHours())+':'+pad(d1.getMinutes()),bis:pad(d2.getHours())+':'+pad(d2.getMinutes()),beschreibung:'Stoppuhr (Mobile, auto-gestoppt)'});
       }
     }
     const now=Date.now();
@@ -1453,7 +1455,7 @@ function newTask(){
   const newT={
     id:generateId(),title:title.trim(),desc:'',owner:'',due:'',status:statuses[0]||'',ampel:'grün',
     ausführungsdatum:'',tags:[],source:'',hausverwaltung:'',adresse:'',schadensbild:'',
-    kontakte:[],gdrive:'',nas:'',links:[],attachments:[],timeEntries:[],
+    kontakte:[],gdrive:'',gdriveOrdner:'',nas:'',links:[],attachments:[],timeEntries:[],
     ausserhausTermine:[],zeitEntries:[],notizVerlauf:[],fotos:[]
   };
   if(!boards[currentBoard])boards[currentBoard]=[];
@@ -1488,13 +1490,13 @@ function setTheme(mode){
   const bd=document.getElementById('themeBtnDark');
   if(bl)bl.style.fontWeight=isLight?'700':'400';
   if(bd)bd.style.fontWeight=isLight?'400':'700';
-  try{localStorage.setItem(THEME_KEY,mode);}catch(e){}
+  try{localStorage.setItem(THEME_KEY,mode);}catch(e){console.warn('[PTP-Mobile]',e);}
 }
 function toggleTheme(){
   setTheme(document.body.classList.contains('light')?'dark':'light');
 }
 function applyStoredTheme(){
-  try{const t=localStorage.getItem(THEME_KEY);setTheme(t||'dark');}catch(e){setTheme('dark');}
+  try{const t=localStorage.getItem(THEME_KEY);setTheme(t||'dark');}catch(e){console.warn('[PTP-Mobile]',e);setTheme('dark');}
 }
 
 // ══ SETTINGS ══
@@ -1521,7 +1523,7 @@ window.addEventListener('load',async()=>{
       document.getElementById('loginStatus').textContent='Token wiederhergestellt, lade Datei…';
       afterLogin();return;
     }
-  }catch(e){}
+  }catch(e){console.warn('[PTP-Mobile]',e);}
   // GIS initialisieren, dann silent refresh versuchen
   const tryAutoConnect = async () => {
     initTokenClient();
@@ -1535,12 +1537,14 @@ window.addEventListener('load',async()=>{
   };
   // Erst nach 1,5s versuchen (Mobilgeräte brauchen länger zum Laden von Google)
   setTimeout(async()=>{
-    if(window.google&&window.google.accounts){
-      await tryAutoConnect();
-    } else {
-      // Google noch nicht geladen – nochmal nach 2s versuchen
-      setTimeout(tryAutoConnect, 2000);
-    }
+    try{
+      if(window.google&&window.google.accounts){
+        await tryAutoConnect();
+      } else {
+        // Google noch nicht geladen – nochmal nach 2s versuchen
+        setTimeout(tryAutoConnect, 2000);
+      }
+    }catch(e){console.warn('[PTP-Mobile]',e);}
   },1500);
 });
 
@@ -1555,7 +1559,7 @@ function _loadPiexif(cb){
   if(window.piexif){cb();return;}
   const s=document.createElement('script');
   s.src='https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.js';
-  s.onload=cb;s.onerror=()=>{};
+  s.onload=cb;s.onerror=()=>{console.warn('[PTP-Mobile] piexif load error');};
   document.head.appendChild(s);
 }
 function embedExifCaption(dataUrl,caption){
@@ -1568,7 +1572,7 @@ function embedExifCaption(dataUrl,caption){
     exifObj['0th'][piexif.ImageIFD.ImageDescription]=caption;
     const exifBytes=piexif.dump(exifObj);
     return piexif.insert(exifBytes,dataUrl);
-  }catch(e){console.warn('EXIF:',e);return dataUrl;}
+  }catch(e){console.warn('[PTP-Mobile] EXIF:',e);return dataUrl;}
 }
 async function _embedExifInDrive(driveId,caption){
   if(!driveId||!caption)return;
@@ -1701,11 +1705,11 @@ function _lbInitPannellum(blobUrl){
   const s=document.createElement('script');
   s.src='https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';
   s.onload=()=>_startViewer();
-  s.onerror=()=>{img.style.display='';container.classList.remove('active');};
+  s.onerror=()=>{console.warn('[PTP-Mobile] pannellum load error');img.style.display='';container.classList.remove('active');};
   document.head.appendChild(s);
 }
 function _lbClosePannellum(){
-  if(_pannellumViewer){try{_pannellumViewer.destroy();}catch(e){}_pannellumViewer=null;}
+  if(_pannellumViewer){try{_pannellumViewer.destroy();}catch(e){console.warn('[PTP-Mobile]',e);}_pannellumViewer=null;}
   const c=document.getElementById('pannellumContainer');
   if(c){c.classList.remove('active');c.innerHTML='';}
   const img=document.getElementById('lbImg');
@@ -1900,7 +1904,7 @@ async function lbSaveCaption(){
         await _uploadTextCopyToDrive(f,val,folderId);
         toast('✓ Textkopie in Drive erstellt','success');
       }
-    }catch(e){console.warn('EXIF/Textkopie-Upload:',e);}
+    }catch(e){console.warn('[PTP-Mobile] EXIF/Textkopie-Upload:',e);}
   }
 }
 // ── Text visuell ins Bild einbrennen und als Kopie hochladen ──
