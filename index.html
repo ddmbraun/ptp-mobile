@@ -118,9 +118,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .foto-thumb .del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:white;border:none;width:22px;height:22px;border-radius:11px;font-size:12px;cursor:pointer;z-index:2}
 .foto-thumb.fallback::before{content:'🖼️';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--text2)}
 /* ── LIGHTBOX (Vollbild-Vorschau) ── */
-.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);touch-action:manipulation;}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:none;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);touch-action:none;overflow:hidden;}
 .lightbox.open{display:flex;}
-.lightbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-select:none;pointer-events:none;}
+.lightbox img{max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-select:none;pointer-events:none;transform-origin:center center;will-change:transform;transition:none;}
 .lightbox .lb-close{position:absolute;top:calc(env(safe-area-inset-top,0) + 10px);right:12px;background:rgba(0,0,0,.7);color:#fff;border:2px solid rgba(255,255,255,.35);width:44px;height:44px;border-radius:50%;font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
 .lightbox .lb-open{position:absolute;bottom:calc(env(safe-area-inset-bottom,0) + 14px);right:12px;background:rgba(255,255,255,.92);color:#000;border:none;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;z-index:2;}
 .lightbox .lb-caption{position:absolute;top:calc(env(safe-area-inset-top,0) + 14px);left:14px;color:#fff;font-size:13px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(0,0,0,.45);padding:6px 10px;border-radius:6px;}
@@ -837,13 +837,11 @@ function renderDetail(t){
     +'</div></div>'
     // ── VERKNÜPFUNGEN ──
     +'<div class="sect'+oc('Verknuepfungen')+'" data-sect="Verknuepfungen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">🔗 Verknüpfungen</div><div class="sect-body">'
-      +'<div class="field"><label>Google Drive – Ordner</label>'
-        +'<div class="field-row" style="gap:6px">'
-          +'<input type="url" value="'+escAttr(t.gdrive||'')+'" placeholder="https://drive.google.com/drive/folders/…" oninput="updateField(\'gdrive\',this.value)" style="flex:1">'
-          +(extractDriveFolderId(t.gdrive)
-            ? '<a class="nav-link" href="'+escAttr(t.gdrive||'')+'" target="_blank" style="padding:10px 12px;font-size:13px">📁</a>'
-            : '<span class="nav-link disabled" style="padding:10px 12px;font-size:13px;pointer-events:none">📁</span>')
-        +'</div>'
+      // Hauptordner – wird am Desktop unter "Projektordner" gesetzt, auf Mobil nur anzeigen/öffnen
+      +'<div class="field"><label>📁 Google Drive – Projektordner</label>'
+        +(t.gdriveOrdner
+          ? '<a href="'+escAttr(t.gdriveOrdner)+'" target="_blank" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--accent);font-size:13px;font-weight:500">📁 Projektordner öffnen</a>'
+          : '<div style="padding:8px 10px;background:var(--bg3);border:1px dashed var(--border);border-radius:8px;color:var(--text2);font-size:12px">Noch nicht verknüpft – bitte am Desktop unter Verknüpfungen eintragen.</div>')
       +'</div>'
     +'</div></div>'
     // ── FOTOS & ANHÄNGE ──
@@ -852,12 +850,12 @@ function renderDetail(t){
       +(attachments.length?'<div style="font-size:11px;color:var(--text2);margin:10px 0 4px">Anhänge vom Desktop</div><div id="attachListMob">'+renderAttachmentsMob(attachments)+'</div>':'')
       +(!fotos.length&&!attachments.length?'<div style="color:var(--text2);font-size:13px;padding:6px 0">Noch keine Fotos oder Anhänge.</div>':'')
       +(extractDriveFolderId(t.gdrive)
-        ? '<div style="font-size:11px;color:var(--green);margin-top:10px">✓ Drive-Ordner ist verknüpft</div>'
+        ? '<div style="font-size:11px;color:var(--green);margin-top:10px">✓ Foto-Ordner verknüpft</div>'
           +'<div class="field-row" style="gap:6px;margin-top:6px">'
             +'<button class="add-btn" style="flex:1" onclick="document.getElementById(\'fotoInputCamera\').click()">📷 Neues Foto</button>'
             +'<button class="add-btn" style="flex:1" onclick="document.getElementById(\'fotoInputGallery\').click()">🖼️ Aus Galerie</button>'
           +'</div>'
-        : '<div style="font-size:12px;color:var(--red);margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--red)">⚠ Zum Foto-Upload zuerst einen Drive-Ordner-Link unter Verknüpfungen eintragen.</div>')
+        : '<div style="font-size:12px;color:var(--red);margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--red)">⚠ Foto-Ordner fehlt – bitte am Desktop unter Verknüpfungen → 📷 Foto-Ordner eintragen.</div>')
       +'<input type="file" id="fotoInputCamera" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
       +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
     +'</div></div>'
@@ -1283,10 +1281,10 @@ async function uploadFoto(files){
   const fileArr=Array.from(files);
   const t=currentTask();
   if(!t){toast('Keine Task geöffnet','error');return;}
+  // Foto-Ordner (gdrive) – wird am Desktop gesetzt, hier nur genutzt
   const folderId=extractDriveFolderId(t.gdrive);
   if(!folderId){
-    toast('❗ Zuerst den Drive-Ordner für Fotos eintragen','error');
-    // Fotos-Sektion offen lassen, damit der Nutzer das gdrive-Feld sieht
+    toast('❗ Foto-Ordner fehlt – bitte am Desktop unter Verknüpfungen eintragen','error');
     _mOpenSections['Fotos']=true;
     renderDetail(t);
     return;
@@ -1381,8 +1379,8 @@ async function _mobDriveCreateTextFile(name,content,parentId){
 }
 async function createAbschlussakteMobile(){
   const t=currentTask();if(!t)return;
-  const folderId=_extractFolderIdMob(t.gdrive);
-  if(!folderId){toast('Zuerst Drive-Ordner im Task eintragen','error');return;}
+  const folderId=_extractFolderIdMob(t.gdrive)||_extractFolderIdMob(t.gdriveOrdner);
+  if(!folderId){toast('Zuerst Drive-Ordner am Desktop unter Verknüpfungen eintragen','error');return;}
   if(!(await ensureToken())){toast('Nicht angemeldet','error');return;}
   const btn=document.getElementById('abschlussBtn');
   if(btn){btn.textContent='⏳ Erstelle…';btn.disabled=true;}
@@ -1398,7 +1396,8 @@ async function createAbschlussakteMobile(){
     if(t.status)txt+='Status:          '+t.status+'\n';
     if(t.ausführungsdatum)txt+='Ausführungsdatum:'+t.ausführungsdatum+'\n';
     if(t.nas)txt+='NAS-Pfad:        '+t.nas+'\n';
-    if(t.gdrive)txt+='Drive-Ordner:    '+t.gdrive+'\n';
+    if(t.gdriveOrdner)txt+='Projektordner:   '+t.gdriveOrdner+'\n';
+    if(t.gdrive)txt+='Foto-Ordner:     '+t.gdrive+'\n';
     if(t.schadensbild)txt+='\nSCHADENSBILD\n------------\n'+t.schadensbild+'\n';
     if(t.desc)txt+='\nNOTIZ\n-----\n'+t.desc+'\n';
     if((t.kontakte||[]).length){
@@ -1556,7 +1555,7 @@ async function _embedExifInDrive(driveId,caption){
 </script>
 
 <!-- ══ LIGHTBOX (Vollbild-Vorschau) ══ -->
-<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+<div class="lightbox" id="lightbox" onclick="_lbHandleTap(event)">
   <div class="lb-caption" id="lbCaption"></div>
   <img id="lbImg" alt="">
   <div id="pannellumContainer"></div>
@@ -1602,6 +1601,7 @@ function openLightbox(src,name,externalUrl,opts){
   opts=opts||{};
   _lbClosePannellum();
   lbDiscardDraw();
+  _lbResetZoom();
   const lb=document.getElementById('lightbox');
   const img=document.getElementById('lbImg');
   const cap=document.getElementById('lbCaption');
@@ -1923,6 +1923,7 @@ function _updateFotoCaptionBadge(i,txt){
 function closeLightbox(){
   _lbClosePannellum();
   lbDiscardDraw();
+  _lbResetZoom();
   const lb=document.getElementById('lightbox');
   lb.classList.remove('open');
   const img=document.getElementById('lbImg');
@@ -1935,6 +1936,85 @@ function closeLightbox(){
 }
 function _lbOnKey(e){if(e.key==='Escape'){closeLightbox();}}
 function lbOpenOriginal(){if(_lbCurrentUrl)window.open(_lbCurrentUrl,'_blank');}
+
+// ── PINCH-TO-ZOOM & PAN ──
+let _lbScale=1,_lbTX=0,_lbTY=0;
+let _lbPinchDist0=0,_lbScale0=1;
+let _lbPan0X=0,_lbPan0Y=0,_lbPanTX0=0,_lbPanTY0=0;
+let _lbPinching=false,_lbPanning=false;
+let _lbLastTap=0;
+
+function _lbDist(a,b){return Math.hypot(b.clientX-a.clientX,b.clientY-a.clientY);}
+function _lbResetZoom(){
+  _lbScale=1;_lbTX=0;_lbTY=0;
+  const img=document.getElementById('lbImg');
+  if(img)img.style.transform='';
+}
+function _lbApply(){
+  const img=document.getElementById('lbImg');
+  if(img)img.style.transform='scale('+_lbScale+') translate('+_lbTX+'px,'+_lbTY+'px)';
+}
+function _lbHandleTap(e){
+  // Schließen nur wenn nicht gezoomt und Klick direkt auf Hintergrund (nicht auf Buttons etc.)
+  if(_lbScale>1.05)return;
+  if(e.target.closest('button,a,input,textarea,select,.lb-textbar,.lb-caption'))return;
+  closeLightbox();
+}
+function _lbOnTouchStart(e){
+  if(document.getElementById('drawCanvas').classList.contains('active'))return;
+  if(e.touches.length===2){
+    e.preventDefault();
+    _lbPinching=true;_lbPanning=false;
+    _lbPinchDist0=_lbDist(e.touches[0],e.touches[1]);
+    _lbScale0=_lbScale;
+  } else if(e.touches.length===1){
+    const now=Date.now();
+    if(now-_lbLastTap<300){
+      // Doppeltipp → Zoom zurücksetzen
+      _lbResetZoom();
+      _lbLastTap=0;
+      e.preventDefault();
+      return;
+    }
+    _lbLastTap=now;
+    if(_lbScale>1.05){
+      e.preventDefault();
+      _lbPanning=true;_lbPinching=false;
+      _lbPan0X=e.touches[0].clientX;
+      _lbPan0Y=e.touches[0].clientY;
+      _lbPanTX0=_lbTX;_lbPanTY0=_lbTY;
+    }
+  }
+}
+function _lbOnTouchMove(e){
+  if(document.getElementById('drawCanvas').classList.contains('active'))return;
+  if(_lbPinching&&e.touches.length===2){
+    e.preventDefault();
+    const dist=_lbDist(e.touches[0],e.touches[1]);
+    _lbScale=Math.min(6,Math.max(1,_lbScale0*(dist/_lbPinchDist0)));
+    _lbApply();
+  } else if(_lbPanning&&e.touches.length===1&&_lbScale>1){
+    e.preventDefault();
+    const dx=(e.touches[0].clientX-_lbPan0X)/_lbScale;
+    const dy=(e.touches[0].clientY-_lbPan0Y)/_lbScale;
+    _lbTX=_lbPanTX0+dx;
+    _lbTY=_lbPanTY0+dy;
+    _lbApply();
+  }
+}
+function _lbOnTouchEnd(e){
+  if(e.touches.length<2)_lbPinching=false;
+  if(e.touches.length===0)_lbPanning=false;
+  if(_lbScale<1.05){_lbScale=1;_lbTX=0;_lbTY=0;_lbApply();}
+}
+// Event-Listener einmal beim Laden anhängen
+(function(){
+  const lb=document.getElementById('lightbox');
+  if(!lb)return;
+  lb.addEventListener('touchstart',_lbOnTouchStart,{passive:false});
+  lb.addEventListener('touchmove',_lbOnTouchMove,{passive:false});
+  lb.addEventListener('touchend',_lbOnTouchEnd,{passive:true});
+})();
 </script>
 </body>
 </html>
