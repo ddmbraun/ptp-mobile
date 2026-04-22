@@ -267,7 +267,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
    PTP Mobile – nutzt dieselbe workboard.json wie PTP
    ═══════════════════════════════════════════════ */
 const GDRIVE_CLIENT_ID='56419258975-2ri3eujer9p6saph1mesa5hihlcae1pl.apps.googleusercontent.com';
-const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
 const TOKEN_KEY='ptpm_token';
 const FILE_KEY='ptpm_file';
 
@@ -875,10 +875,7 @@ function renderDetail(t){
       +'<input type="file" id="fotoInputCamera" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
       +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
     +'</div></div>'
-    // ── LÖSCHEN ──
-    +'<div class="sect'+oc('Löschen')+'" data-sect="Löschen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">⚠ Task löschen</div><div class="sect-body">'
-      +'<button class="inline-btn danger" style="width:100%" onclick="deleteTask()">🗑 Task löschen</button>'
-    +'</div></div>';
+;
   // Authentifizierte Thumbnails nachladen (Blob-URL via Drive API)
   try{hydrateFotoThumbs();}catch(e){console.warn('hydrateFotoThumbs:',e);}
   // Gespeicherte Textgröße anwenden
@@ -1263,6 +1260,93 @@ function downloadAttachMob(i){
   link.href=a.data;link.download=a.name||'datei';
   document.body.appendChild(link);link.click();document.body.removeChild(link);
 }
+// ── DRIVE-ORDNER-LADER ──
+async function loadFotosFromDriveFolder(){
+  if(!gdriveToken){toast('Bitte zuerst mit Google Drive verbinden','error');return;}
+  const taskId=currentTaskId;
+  const task=findTaskById(taskId);
+  const folderId=task?extractDriveFolderId(task.gdrive||''):null;
+  if(!folderId){toast('Kein Foto-Ordner im Task eingetragen (Verknüpfungen)','error');return;}
+  toast('⏳ Lade Fotos aus Drive…','info');
+  try{
+    const url='https://www.googleapis.com/drive/v3/files'
+      +'?q='+encodeURIComponent("'"+folderId+"' in parents and (mimeType contains 'image/') and trashed=false")
+      +'&fields='+encodeURIComponent('files(id,name,mimeType,thumbnailLink,createdTime)')
+      +'&orderBy=createdTime+desc&pageSize=100';
+    const r=await fetch(url,{headers:{Authorization:'Bearer '+gdriveToken}});
+    if(!r.ok){
+      if(r.status===403||r.status===401){toast('Keine Berechtigung – bitte Drive neu verbinden','error');}
+      else{toast('Fehler beim Laden ('+r.status+')','error');}
+      return;
+    }
+    const data=await r.json();
+    const files=data.files||[];
+    if(!files.length){toast('Keine Fotos im Ordner gefunden','info');return;}
+    _showMobileFolderPicker(files,task);
+  }catch(e){console.warn('[PTP-Mobile]',e);toast('Fehler: '+e.message,'error');}
+}
+function _showMobileFolderPicker(files,task){
+  let overlay=document.getElementById('mobileFolderPickerOverlay');
+  if(overlay)overlay.remove();
+  overlay=document.createElement('div');
+  overlay.id='mobileFolderPickerOverlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;flex-direction:column;';
+  const fotos=task&&task.fotos?task.fotos:[];
+  const grid=files.map(f=>{
+    const thumb=f.thumbnailLink?f.thumbnailLink.replace(/=s\d+$/,'=s160'):'';
+    const already=fotos.find(t=>t.driveId===f.id)?'1':'0';
+    const borderCol=already==='1'?'#6a8aff':'transparent';
+    const checkDisp=already==='1'?'flex':'none';
+    return '<div class="mfp-item" data-id="'+esc(f.id)+'" data-name="'+esc(f.name)+'" data-mime="'+esc(f.mimeType||'image/jpeg')+'" data-selected="'+already+'" onclick="_mfpToggle(this)" style="position:relative;width:calc(33% - 4px);aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid '+borderCol+';background:#222;flex-shrink:0;">'
+      +(thumb?'<img src="'+esc(thumb)+'" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display=\'none\'">'
+             :'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;">🖼️</div>')
+      +'<div style="position:absolute;bottom:0;left:0;right:0;font-size:9px;padding:2px 4px;background:rgba(0,0,0,.65);color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(f.name)+'</div>'
+      +'<div class="mfp-check" style="display:'+checkDisp+';position:absolute;top:4px;right:4px;background:#6a8aff;color:#fff;border-radius:50%;width:22px;height:22px;align-items:center;justify-content:center;font-size:13px;font-weight:700;">✓</div>'
+      +'</div>';
+  }).join('');
+  overlay.innerHTML='<div style="background:#1a1a2e;padding:14px 14px 8px;display:flex;justify-content:space-between;align-items:center;">'
+    +'<b style="color:#fff;font-size:15px;">📷 Fotos auswählen</b>'
+    +'<button onclick="document.getElementById(\'mobileFolderPickerOverlay\').remove()" style="background:none;border:none;color:#aaa;font-size:22px;padding:0 4px;cursor:pointer;">✕</button>'
+    +'</div>'
+    +'<div style="padding:0 14px 6px;font-size:11px;color:#aaa;">Tippe auf Fotos um sie auszuwählen</div>'
+    +'<div style="flex:1;overflow-y:auto;padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;">'+grid+'</div>'
+    +'<div style="padding:12px 14px;display:flex;gap:10px;background:#1a1a2e;border-top:1px solid #333;">'
+    +'<button onclick="document.getElementById(\'mobileFolderPickerOverlay\').remove()" style="flex:1;padding:12px;border-radius:8px;border:1px solid #555;background:#2a2a3e;color:#ccc;font-size:14px;cursor:pointer;">Abbrechen</button>'
+    +'<button onclick="_mfpConfirm()" style="flex:2;padding:12px;border-radius:8px;background:#6a8aff;color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;">✓ Übernehmen</button>'
+    +'</div>';
+  document.body.appendChild(overlay);
+}
+function _mfpToggle(el){
+  const sel=el.dataset.selected==='1';
+  el.dataset.selected=sel?'0':'1';
+  el.style.borderColor=sel?'transparent':'#6a8aff';
+  const chk=el.querySelector('.mfp-check');
+  if(chk)chk.style.display=sel?'none':'flex';
+}
+function _mfpConfirm(){
+  const overlay=document.getElementById('mobileFolderPickerOverlay');
+  if(!overlay)return;
+  const task=findTaskById(currentTaskId);
+  if(!task)return;
+  if(!task.fotos)task.fotos=[];
+  const selected=[...overlay.querySelectorAll('.mfp-item[data-selected="1"]')];
+  const allIds=new Set([...overlay.querySelectorAll('.mfp-item')].map(el=>el.dataset.id));
+  const selectedIds=new Set(selected.map(el=>el.dataset.id));
+  // Nicht mehr ausgewählte Drive-Fotos entfernen, neue hinzufügen
+  task.fotos=task.fotos.filter(f=>!f.driveId||!allIds.has(f.driveId)||selectedIds.has(f.driveId));
+  let added=0;
+  selected.forEach(el=>{
+    if(!task.fotos.find(f=>f.driveId===el.dataset.id)){
+      task.fotos.push({driveId:el.dataset.id,name:el.dataset.name,mimeType:el.dataset.mime||'image/jpeg',caption:''});
+      added++;
+    }
+  });
+  overlay.remove();
+  forceSave();
+  renderDetail(task);
+  if(added>0)toast('✓ '+added+' Foto(s) hinzugefügt','success');
+  else toast('Auswahl aktualisiert','info');
+}
 // ── DRIVE-FOTO-UPLOAD (Etappe 3) ──
 // Zieht die Drive-Ordner-ID aus einer URL wie
 // https://drive.google.com/drive/u/0/folders/1MvhZG... oder https://drive.google.com/drive/folders/1MvhZG...
@@ -1613,8 +1697,10 @@ async function _embedExifInDrive(driveId,caption){
       <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000">
       <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5">
       <button class="lb-draw-btn on" id="drawModePen"  onclick="event.stopPropagation();lbSetMode('pen',this)" title="Stift">✏️</button>
+      <button class="lb-draw-btn"    id="drawModeLine" onclick="event.stopPropagation();lbSetMode('line',this)" title="Linie">╱</button>
       <button class="lb-draw-btn"    id="drawModeRect" onclick="event.stopPropagation();lbSetMode('rect',this)" title="Rechteck">▭</button>
       <button class="lb-draw-btn"    id="drawModeCirc" onclick="event.stopPropagation();lbSetMode('circ',this)" title="Kreis">◯</button>
+      <button class="lb-draw-btn"    id="drawModeArrow" onclick="event.stopPropagation();lbSetMode('arrow',this)" title="Pfeil">➜</button>
       <button class="lb-draw-btn"    id="drawEraserBtn" onclick="event.stopPropagation();lbSetMode('erase',this)" title="Radierer">⬜</button>
     </div>
     <div class="lb-draw-row">
@@ -1748,8 +1834,7 @@ function _onDrawDown(e){
   e.preventDefault();
   document.getElementById('drawCanvas').setPointerCapture(e.pointerId);
   _drawPointer={x:e.offsetX,y:e.offsetY};
-  if(_drawMode==='rect'||_drawMode==='circ'){
-    // Snapshot für Vorschau merken
+  if(_drawMode==='rect'||_drawMode==='circ'||_drawMode==='line'||_drawMode==='arrow'){
     _drawSnapshot=_drawCtx.getImageData(0,0,_drawCtx.canvas.width,_drawCtx.canvas.height);
   }else{
     _drawCtx.beginPath();_drawCtx.moveTo(e.offsetX,e.offsetY);
@@ -1766,20 +1851,21 @@ function _onDrawMove(e){
     ctx.lineWidth=size*3;ctx.lineCap='round';ctx.lineJoin='round';
     ctx.lineTo(e.offsetX,e.offsetY);ctx.stroke();
     ctx.beginPath();ctx.moveTo(e.offsetX,e.offsetY);
-  }else if(_drawMode==='rect'||_drawMode==='circ'){
-    // Snapshot wiederherstellen, dann Vorschau zeichnen
+  }else if(_drawMode==='rect'||_drawMode==='circ'||_drawMode==='line'||_drawMode==='arrow'){
     if(_drawSnapshot)ctx.putImageData(_drawSnapshot,0,0);
     ctx.globalCompositeOperation='source-over';
-    ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='square';
-    const x0=_drawPointer.x,y0=_drawPointer.y;
-    const x1=e.offsetX,y1=e.offsetY;
+    ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';
+    const x0=_drawPointer.x,y0=_drawPointer.y,x1=e.offsetX,y1=e.offsetY;
     ctx.beginPath();
     if(_drawMode==='rect'){
-      ctx.strokeRect(x0,y0,x1-x0,y1-y0);
-    }else{
+      ctx.lineCap='square';ctx.strokeRect(x0,y0,x1-x0,y1-y0);
+    }else if(_drawMode==='circ'){
       const rx=Math.abs(x1-x0)/2,ry=Math.abs(y1-y0)/2;
-      ctx.ellipse(x0+(x1-x0)/2,y0+(y1-y0)/2,rx,ry,0,0,2*Math.PI);
-      ctx.stroke();
+      ctx.ellipse(x0+(x1-x0)/2,y0+(y1-y0)/2,rx,ry,0,0,2*Math.PI);ctx.stroke();
+    }else if(_drawMode==='line'){
+      ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    }else if(_drawMode==='arrow'){
+      _lbDrawArrow(ctx,x0,y0,x1,y1,size,color);
     }
   }else{
     ctx.globalCompositeOperation='source-over';
@@ -1789,8 +1875,20 @@ function _onDrawMove(e){
   }
 }
 function _onDrawUp(e){
-  if(_drawMode==='rect'||_drawMode==='circ')_drawSnapshot=null;
+  if(_drawMode==='rect'||_drawMode==='circ'||_drawMode==='line'||_drawMode==='arrow')_drawSnapshot=null;
   _drawPointer=null;
+}
+function _lbDrawArrow(ctx,x0,y0,x1,y1,size,color){
+  const headLen=Math.max(16,size*5);
+  const angle=Math.atan2(y1-y0,x1-x0);
+  ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-headLen*Math.cos(angle-Math.PI/6),y1-headLen*Math.sin(angle-Math.PI/6));
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-headLen*Math.cos(angle+Math.PI/6),y1-headLen*Math.sin(angle+Math.PI/6));
+  ctx.stroke();
 }
 function lbDiscardDraw(){
   _drawPointer=null;_drawErasing=false;
