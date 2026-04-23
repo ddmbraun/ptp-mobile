@@ -725,6 +725,9 @@ async function saveFile(){
             hiddenBoards=remoteHidden;
             if(remote._boardStatuses&&typeof remote._boardStatuses==='object')
               _remoteBoardStatuses={...remote._boardStatuses};
+            // Board-Typen (Baustelle/Aufgaben) aus Remote übernehmen, damit nach PC-Konflikt-Merge korrekt
+            if(remote._boardTypes&&typeof remote._boardTypes==='object'&&Object.keys(remote._boardTypes).length)
+              boardTypes={...remote._boardTypes};
           }
         }
       }
