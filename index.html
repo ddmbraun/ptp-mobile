@@ -563,15 +563,14 @@ function _applyMobileFilter(data){
   mobileWhitelist=Array.isArray(data._mobileBoards)?data._mobileBoards.slice():[];
   _remoteBoardStatuses=(data._boardStatuses&&typeof data._boardStatuses==='object')?{...data._boardStatuses}:{};
   boardTypes=(data._boardTypes&&typeof data._boardTypes==='object'&&Object.keys(data._boardTypes).length)?{...data._boardTypes}:{};
-  // ── AUTO-MIGRATION: boardTypes aus Boardname ableiten wenn leer ──
-  if(!Object.keys(boardTypes).length){
-    const _np=/aufgab|notiz|todo|to[\s_-]do/i;
-    for(const k of Object.keys(data)){
-      if(k.startsWith('_')||!Array.isArray(data[k]))continue;
-      boardTypes[k]=_np.test(k)?'notiz':'baustelle';
-    }
-    if(Object.keys(boardTypes).length)console.info('[PTPm] boardTypes auto-migriert:',boardTypes);
+  // ── AUTO-MIGRATION: fehlende boardTypes aus Boardname ergänzen ──
+  {const _np=/aufgab|notiz|todo|to[\s_-]do/i;
+  let _m=0;
+  for(const k of Object.keys(data)){
+    if(k.startsWith('_')||!Array.isArray(data[k]))continue;
+    if(!boardTypes[k]){boardTypes[k]=_np.test(k)?'notiz':'baustelle';_m++;}
   }
+  if(_m)console.info('[PTPm] boardTypes ergänzt ('+_m+' Boards):',boardTypes);}
   boards={};hiddenBoards={};
   const hasWhitelist=mobileWhitelist.length>0;
   for(const[k,v]of Object.entries(data)){
