@@ -227,7 +227,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   </div>
   <div class="size-bar" id="mSizeBar">
     <span class="size-bar-icon" style="font-size:12px;color:var(--text2)">A</span>
-    <input id="mSizeSlider" type="range" min="80" max="180" step="5" value="100" oninput="setMobileScale(this.value)">
+    <input id="mSizeSlider" type="range" min="80" max="180" step="5" value="100" oninput="setMobileScale(this.value)" autocomplete="off">
     <span class="size-bar-val" id="mSizeVal">100%</span>
   </div>
   <div class="detail-body" id="detailBody"></div>
@@ -262,7 +262,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
       <div class="sect-head" onclick="toggleMSect(this.parentElement)">📁 Datei wechseln</div>
       <div class="sect-body">
         <div class="field"><label>Google Drive – Datei-URL oder ID</label>
-          <input type="url" id="manualFileInput" placeholder="https://drive.google.com/file/d/…" style="width:100%;box-sizing:border-box;">
+          <input type="url" id="manualFileInput" placeholder="https://drive.google.com/file/d/…" style="width:100%;box-sizing:border-box;" autocomplete="off">
         </div>
         <button class="inline-btn primary" style="width:100%;margin-bottom:8px" onclick="connectManualFile()">🔗 Verbinden</button>
         <button class="inline-btn" style="width:100%;margin-bottom:8px" onclick="searchAndConnectFile()">🔍 Automatisch suchen</button>
@@ -734,6 +734,7 @@ async function saveFile(){
                     mergedTask.ausserhausTermine=_mergeListByKey(rt.ausserhausTermine,localTask.ausserhausTermine,e=>((e.date||'')+'|'+(e.von||'')+'|'+(e.bis||'')+'|'+(e.beschreibung||'')));
                     mergedTask.fotos=_mergeListByKey(rt.fotos,localTask.fotos,f=>(f.id||f.driveId||f.path||f.name||''));
                     mergedTask.attachments=_mergeListByKey(rt.attachments,localTask.attachments,f=>((f.name||'')+'|'+(f.size||0)));
+                    mergedTask.pruefberichte=_mergeListByKey(rt.pruefberichte,localTask.pruefberichte,b=>(b.createdAt||b.titel||''));
                     remoteVisible[bn][idx]=mergedTask;
                     placed=true;break;
                   }
@@ -1335,7 +1336,7 @@ function renderDetail(t){
         +'<input id="timerDesc" type="text" placeholder="Tätigkeitsbeschreibung vor dem Start eingeben…" maxlength="120"'
           +(running?' disabled':'')
           +' value="'+escAttr(savedDesc)+'"'
-          +' style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;min-height:44px;">'
+          +' style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;min-height:44px;" autocomplete="off">'
         +'</div>'
         +'<div style="display:flex;gap:8px;margin-bottom:10px;">'
         +(t.gdrive?'<a href="'+escAttr(t.gdrive)+'" target="_blank" style="flex:1;padding:10px 6px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:5px;">📷 Fotos in Drive</a>':'<span style="flex:1;padding:10px 6px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;display:flex;align-items:center;justify-content:center;">📷 kein Foto-Ordner</span>')
@@ -1344,18 +1345,18 @@ function renderDetail(t){
     })()
     // ── STAMMDATEN ──
     +'<div class="sect'+oc('Stammdaten')+'" data-sect="Stammdaten"><div class="sect-head" onclick="toggleMSect(this.parentElement)">'+(isNotiz?'✅ Aufgaben':'🏗 Baustelle')+'</div><div class="sect-body">'
-      +'<div class="field"><label>Titel</label><input type="text" value="'+escAttr(t.title||'')+'" oninput="updateField(\'title\',this.value);document.getElementById(\'detailTitle\').textContent=this.value||\'(ohne Titel)\'"></div>'
-      +'<div class="field-row"><div class="field"><label>Kostenstelle / Tags</label><input type="text" value="'+escAttr((t.tags||[]).join(', '))+'" placeholder="z.B. 260036" oninput="updateTags(this.value)"></div></div>'
+      +'<div class="field"><label>Titel</label><input type="text" value="'+escAttr(t.title||'')+'" oninput="updateField(\'title\',this.value);document.getElementById(\'detailTitle\').textContent=this.value||\'(ohne Titel)\'" autocomplete="off"></div>'
+      +'<div class="field-row"><div class="field"><label>Kostenstelle / Tags</label><input type="text" value="'+escAttr((t.tags||[]).join(', '))+'" placeholder="z.B. 260036" oninput="updateTags(this.value)" autocomplete="off"></div></div>'
       +(isNotiz
         ? '<div class="field"><label>Status</label><select onchange="updateField(\'status\',this.value)">'+statusOpts+'</select></div>'
         : '<div class="field-row"><div class="field"><label>Status</label><select onchange="updateField(\'status\',this.value)">'+statusOpts+'</select></div>'
           +'<div class="field" style="flex:0 0 100px"><label>Ampel</label><select onchange="updateField(\'ampel\',this.value)">'
             +['grün','orange','rot'].map(a=>'<option value="'+a+'"'+(a===(t.ampel||'grün')?' selected':'')+'>'+({'grün':'🟢','orange':'🟠','rot':'🔴'}[a])+'</option>').join('')
           +'</select></div></div>')
-      +'<div class="field"><label>Ausführungsdatum</label><input type="date" value="'+escAttr(t.ausführungsdatum||'')+'" onchange="updateField(\'ausführungsdatum\',this.value)"></div>'
-      +(!isNotiz?'<div class="field"><label>Adresse</label><div class="field-row" style="gap:6px"><input type="text" value="'+escAttr(t.adresse||'')+'" placeholder="Straße, PLZ Ort" oninput="updateField(\'adresse\',this.value);updateNavBtn()"><a id="navBtn" class="nav-link'+(t.adresse?'':' disabled')+'" href="'+(t.adresse?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(t.adresse):'#')+'" target="_blank">🗺️</a></div></div>':'')
-      +(!isNotiz?'<div class="field"><label>Hausverwaltung</label><input type="text" value="'+escAttr(t.hausverwaltung||'')+'" oninput="updateField(\'hausverwaltung\',this.value)"></div>':'')
-      +'<div class="field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><label style="margin:0">'+(isNotiz?'Beschreibung':'Schaden / Beschreibung')+'</label><button type="button" class="inline-btn" style="padding:4px 10px;font-size:11px" onclick="toggleExpandTA(this.parentElement.nextElementSibling)">🔍 vergrößern</button></div><textarea id="mSchTA" class="expandable-ta" oninput="updateField(\'schadensbild\',this.value)">'+esc(t.schadensbild||'')+'</textarea></div>'
+      +'<div class="field"><label>Ausführungsdatum</label><input type="date" value="'+escAttr(t.ausführungsdatum||'')+'" onchange="updateField(\'ausführungsdatum\',this.value)" autocomplete="off"></div>'
+      +(!isNotiz?'<div class="field"><label>Adresse</label><div class="field-row" style="gap:6px"><input type="text" value="'+escAttr(t.adresse||'')+'" placeholder="Straße, PLZ Ort" oninput="updateField(\'adresse\',this.value);updateNavBtn()" autocomplete="off"><a id="navBtn" class="nav-link'+(t.adresse?'':' disabled')+'" href="'+(t.adresse?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(t.adresse):'#')+'" target="_blank">🗺️</a></div></div>':'')
+      +(!isNotiz?'<div class="field"><label>Hausverwaltung</label><input type="text" value="'+escAttr(t.hausverwaltung||'')+'" oninput="updateField(\'hausverwaltung\',this.value)" autocomplete="off"></div>':'')
+      +'<div class="field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><label style="margin:0">'+(isNotiz?'Beschreibung':'Schaden / Beschreibung')+'</label><button type="button" class="inline-btn" style="padding:4px 10px;font-size:11px" onclick="toggleExpandTA(this.parentElement.nextElementSibling)">🔍 vergrößern</button></div><textarea id="mSchTA" class="expandable-ta" oninput="updateField(\'schadensbild\',this.value)" autocomplete="off">'+esc(t.schadensbild||'')+'</textarea></div>'
     +'</div></div>'
     // ── KONTAKTE (nur Baustelle) ──
     +(!isNotiz?'<div class="sect'+oc('Kontakte')+'" data-sect="Kontakte"><div class="sect-head" onclick="toggleMSect(this.parentElement)">Kontakte ('+kontakte.length+')</div><div class="sect-body">'
@@ -1370,15 +1371,15 @@ function renderDetail(t){
     +'</div></div>':'')
     // ── NOTIZEN ──
     +'<div class="sect'+oc('Notizen')+'" data-sect="Notizen"><div class="sect-head" onclick="toggleMSect(this.parentElement)">📝 Notizen</div><div class="sect-body">'
-      +'<div class="field"><label>Dauerhafte Notiz</label><textarea rows="3" style="resize:none;transition:height .2s" placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)" onfocus="this.rows=8" onblur="if(!this.value)this.rows=3;else this.rows=4">'+esc(t.desc||'')+'</textarea></div>'
+      +'<div class="field"><label>Dauerhafte Notiz</label><textarea rows="3" style="resize:none;transition:height .2s" placeholder="Dauerhafte Notizen zum Task…" oninput="updateField(\'desc\',this.value)" onfocus="this.rows=8" onblur="if(!this.value)this.rows=3;else this.rows=4" autocomplete="off">'+esc(t.desc||'')+'</textarea></div>'
       +'<div class="field"><label>Chronologische Einträge</label><div id="notizList">'+renderNotizen(notizVerlauf)+'</div>'
-      +'<div class="field-row" style="margin-top:6px"><input type="text" id="newNotizInput" placeholder="Kurze Notiz mit Zeitstempel…"><button class="inline-btn primary" onclick="addNotiz()">+</button></div></div>'
+      +'<div class="field-row" style="margin-top:6px"><input type="text" id="newNotizInput" placeholder="Kurze Notiz mit Zeitstempel…" autocomplete="off"><button class="inline-btn primary" onclick="addNotiz()">+</button></div></div>'
     +'</div></div>'
     // ── CHECKLISTE ──
     +'<div class="sect'+oc('Checkliste')+'" data-sect="Checkliste"><div class="sect-head" onclick="toggleMSect(this.parentElement)" id="mCkHead">'+_mCkTitle()+'</div><div class="sect-body">'
       +'<div id="mCkList">'+_renderMCkItems()+'</div>'
       +'<div style="display:flex;gap:8px;margin-top:6px;">'
-        +'<input type="text" id="mNewCkInput" placeholder="Neue Aufgabe…" style="flex:1;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMCkItem();}">'
+        +'<input type="text" id="mNewCkInput" placeholder="Neue Aufgabe…" style="flex:1;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addMCkItem();}" autocomplete="off">'
         +'<button class="add-btn" style="width:44px;flex-shrink:0;font-size:18px;padding:0" onclick="addMCkItem()">+</button>'
       +'</div>'
     +'</div></div>'
@@ -1431,8 +1432,8 @@ function renderDetail(t){
             +'<button class="add-btn" style="flex:1" onclick="document.getElementById(\'fotoInputGallery\').click()">🖼️ Aus Galerie</button>'
           +'</div>'
         : '<div style="font-size:12px;color:var(--red);margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--red)">⚠ Foto-Ordner fehlt – bitte am Desktop unter Verknüpfungen → 📷 Foto-Ordner eintragen.</div>')
-      +'<input type="file" id="fotoInputCamera" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
-      +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'">'
+      +'<input type="file" id="fotoInputCamera" accept="image/*" capture="environment" style="display:none" onchange="uploadFoto(this.files);this.value=\'\'" autocomplete="off">'
+      +'<input type="file" id="fotoInputGallery" accept="image/*" multiple style="display:none" onchange="uploadFoto(this.files);this.value=\'\'" autocomplete="off">'
     +'</div></div>':'')
     // ── DATEIANHÄNGE (nur Baustelle) ──
     +(!isNotiz?'<div class="sect'+oc('Anhaenge')+'" data-sect="Anhaenge"><div class="sect-head" onclick="toggleMSect(this.parentElement)" style="display:flex;align-items:center;justify-content:space-between;"><span>📎 Dateianhänge'+(attachments.length?' ('+attachments.length+')':'')+'</span>'+(attachments.length?'<button onclick="event.stopPropagation();_openAttachThumbnailGridMob()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;cursor:pointer;font-weight:600;">🖼 Alle ansehen</button>':'')+'</div><div class="sect-body">'
@@ -1492,9 +1493,9 @@ function renderKontakt(k,i){
   return '<div class="kontakt-entry">'
     +'<div class="kontakt-entry-head"><select onchange="updateKontakt('+i+',\'rolle\',this.value)">'+rolleOpts+'</select>'
     +'<button class="rm-btn" onclick="removeKontakt('+i+')">✕</button></div>'
-    +'<div class="field"><label>Name</label><input type="text" value="'+escAttr(k.name||'')+'" oninput="updateKontakt('+i+',\'name\',this.value)"></div>'
-    +'<div class="field"><label>Telefon</label><div class="field-row" style="gap:6px"><input type="tel" value="'+escAttr(k.tel||'')+'" oninput="updateKontakt('+i+',\'tel\',this.value)"><a class="call-link'+(k.tel?'':' disabled')+'" href="'+telHref+'">📞</a></div></div>'
-    +'<div class="field"><label>E-Mail</label><input type="email" value="'+escAttr(k.email||'')+'" oninput="updateKontakt('+i+',\'email\',this.value)"></div>'
+    +'<div class="field"><label>Name</label><input type="text" value="'+escAttr(k.name||'')+'" oninput="updateKontakt('+i+',\'name\',this.value)" autocomplete="off"></div>'
+    +'<div class="field"><label>Telefon</label><div class="field-row" style="gap:6px"><input type="tel" value="'+escAttr(k.tel||'')+'" oninput="updateKontakt('+i+',\'tel\',this.value)" autocomplete="off"><a class="call-link'+(k.tel?'':' disabled')+'" href="'+telHref+'">📞</a></div></div>'
+    +'<div class="field"><label>E-Mail</label><input type="email" value="'+escAttr(k.email||'')+'" oninput="updateKontakt('+i+',\'email\',this.value)" autocomplete="off"></div>'
     +'</div>';
 }
 function addKontakt(){
@@ -1520,12 +1521,12 @@ function renderTermineRows(list){
   return list.map((t,i)=>''
     +'<div class="termin-row">'
       +'<div class="row-times">'
-        +'<input type="date" value="'+escAttr(t.date||'')+'" onchange="updateTermin('+i+',\'date\',this.value)">'
-        +'<input type="time" value="'+escAttr(t.von||'')+'" onchange="updateTermin('+i+',\'von\',this.value);updateTermineGesamt()" placeholder="von">'
-        +'<input type="time" value="'+escAttr(t.bis||'')+'" onchange="updateTermin('+i+',\'bis\',this.value);updateTermineGesamt()" placeholder="bis">'
+        +'<input type="date" value="'+escAttr(t.date||'')+'" onchange="updateTermin('+i+',\'date\',this.value)" autocomplete="off">'
+        +'<input type="time" value="'+escAttr(t.von||'')+'" onchange="updateTermin('+i+',\'von\',this.value);updateTermineGesamt()" placeholder="von" autocomplete="off">'
+        +'<input type="time" value="'+escAttr(t.bis||'')+'" onchange="updateTermin('+i+',\'bis\',this.value);updateTermineGesamt()" placeholder="bis" autocomplete="off">'
       +'</div>'
       +'<div class="row-desc">'
-        +'<input type="text" placeholder="Beschreibung" value="'+escAttr(t.beschreibung||'')+'" oninput="updateTermin('+i+',\'beschreibung\',this.value)">'
+        +'<input type="text" placeholder="Beschreibung" value="'+escAttr(t.beschreibung||'')+'" oninput="updateTermin('+i+',\'beschreibung\',this.value)" autocomplete="off">'
         +'<button class="rm-btn" onclick="removeTermin('+i+')">✕</button>'
       +'</div>'
       +'<button class="inline-btn" style="width:100%;margin-top:6px" onclick="openGcal('+i+')">📅 In Google Kalender</button>'
@@ -1698,12 +1699,12 @@ function renderZeitenRows(list){
     return ''
     +'<div class="zeit-row">'
       +'<div class="row-times">'
-        +'<input type="date" value="'+escAttr(z.date||'')+'" onchange="updateZeit('+i+',\'date\',this.value)">'
-        +'<input type="time" value="'+escAttr(z.von||'')+'" onchange="updateZeit('+i+',\'von\',this.value);updateZeitGesamt()" placeholder="von">'
-        +'<input type="time" value="'+escAttr(z.bis||'')+'" onchange="updateZeit('+i+',\'bis\',this.value);updateZeitGesamt()" placeholder="bis">'
+        +'<input type="date" value="'+escAttr(z.date||'')+'" onchange="updateZeit('+i+',\'date\',this.value)" autocomplete="off">'
+        +'<input type="time" value="'+escAttr(z.von||'')+'" onchange="updateZeit('+i+',\'von\',this.value);updateZeitGesamt()" placeholder="von" autocomplete="off">'
+        +'<input type="time" value="'+escAttr(z.bis||'')+'" onchange="updateZeit('+i+',\'bis\',this.value);updateZeitGesamt()" placeholder="bis" autocomplete="off">'
       +'</div>'
       +'<div class="row-desc">'
-        +'<input type="text" placeholder="Beschreibung" value="'+escAttr(z.beschreibung||'')+'" oninput="updateZeit('+i+',\'beschreibung\',this.value)">'
+        +'<input type="text" placeholder="Beschreibung" value="'+escAttr(z.beschreibung||'')+'" oninput="updateZeit('+i+',\'beschreibung\',this.value)" autocomplete="off">'
         +calBtn
         +'<button class="rm-btn" onclick="removeZeit('+i+')">✕</button>'
       +'</div>'
@@ -1782,8 +1783,8 @@ function _renderMCkItems(){
   if(!mTaskCheckliste.length)return '';
   return mTaskCheckliste.map((item,i)=>`
     <div class="ck-item">
-      <input type="checkbox" ${item.done?'checked':''} onchange="mTaskCheckliste[${i}].done=this.checked;this.nextElementSibling.classList.toggle('done-text',this.checked);_saveMCk()">
-      <input type="text" value="${esc(item.text)}" placeholder="Aufgabe…" class="${item.done?'done-text':''}" oninput="mTaskCheckliste[${i}].text=this.value;_saveMCk()">
+      <input type="checkbox" ${item.done?'checked':''} onchange="mTaskCheckliste[${i}].done=this.checked;this.nextElementSibling.classList.toggle('done-text',this.checked);_saveMCk()" autocomplete="off">
+      <input type="text" value="${esc(item.text)}" placeholder="Aufgabe…" class="${item.done?'done-text':''}" oninput="mTaskCheckliste[${i}].text=this.value;_saveMCk()" autocomplete="off">
       <button type="button" class="ck-del" onclick="removeMCkItem(${i})">✕</button>
     </div>`).join('');
 }
@@ -1859,9 +1860,10 @@ function renderFotos(list){
     const id=(f.editedDriveId||f.driveId)||'';
     const caption=f.caption||'';
     const cached=id?_fotoBlobCache.get(id):null;
+    const thumbSrc=f.thumbnail||(id?'https://drive.google.com/thumbnail?id='+id+'&sz=w400':'');
     const srcAttr=cached?('src="'+escAttr(cached)+'" ')
-                 :(id?'data-foto-id="'+escAttr(id)+'" '
-                     :(f.thumbnail?'src="'+escAttr(f.thumbnail)+'" ':''));
+                 :(id?'data-foto-id="'+escAttr(id)+'" src="'+escAttr(thumbSrc)+'" '
+                     :(thumbSrc?'src="'+escAttr(thumbSrc)+'" ':''));
     const tip=caption?(caption+' — '+name):name;
     const editedBadge=f.editedDriveId?'<span style="position:absolute;top:3px;left:3px;background:var(--accent);color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700;">✏</span>':'';
     return '<div class="foto-thumb" onclick="openFotoFullscreen('+i+')" title="'+escAttr(tip)+'">'
@@ -1917,10 +1919,17 @@ function _showTextViewer(name,text){
 function downloadAttachMob(i){
   const t=currentTask();if(!t||!t.attachments||!t.attachments[i])return;
   const a=t.attachments[i];
-  if(!a.data)return;
-  const link=document.createElement('a');
-  link.href=a.data;link.download=a.name||'datei';
-  document.body.appendChild(link);link.click();document.body.removeChild(link);
+  if(a.data){
+    const link=document.createElement('a');
+    link.href=a.data;link.download=a.name||'datei';
+    document.body.appendChild(link);link.click();document.body.removeChild(link);
+  } else if(a.driveId||a.fileId){
+    window.open('https://drive.google.com/file/d/'+(a.driveId||a.fileId)+'/view','_blank');
+  } else if(a.url){
+    window.open(a.url,'_blank');
+  } else {
+    toast('Keine Datei verfügbar','error');
+  }
 }
 // ── DRIVE-ORDNER-LADER ──
 async function loadFotosFromDriveFolder(){
@@ -1999,7 +2008,7 @@ function _mfpConfirm(){
   let added=0;
   selected.forEach(el=>{
     if(!task.fotos.find(f=>f.driveId===el.dataset.id)){
-      task.fotos.push({driveId:el.dataset.id,name:el.dataset.name,mimeType:el.dataset.mime||'image/jpeg',caption:''});
+      task.fotos.push({driveId:el.dataset.id,name:el.dataset.name,mimeType:el.dataset.mime||'image/jpeg',caption:'',thumbnail:'https://drive.google.com/thumbnail?id='+el.dataset.id+'&sz=w400'});
       added++;
     }
   });
@@ -2390,8 +2399,8 @@ async function _embedExifInDrive(driveId,caption){
   <!-- Zeichen-Toolbar -->
   <div class="lb-draw-bar" id="lbDrawBar" onclick="event.stopPropagation()">
     <div class="lb-draw-row">
-      <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000">
-      <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5">
+      <input type="color" class="lb-draw-color" id="drawColor" value="#ff0000" autocomplete="off">
+      <input type="range" class="lb-draw-size" id="drawSize" min="2" max="30" value="5" autocomplete="off">
       <button class="lb-draw-btn on" id="drawModePen"  onclick="event.stopPropagation();lbSetMode('pen',this)" title="Stift">✏️</button>
       <button class="lb-draw-btn"    id="drawModeLine" onclick="event.stopPropagation();lbSetMode('line',this)" title="Linie">╱</button>
       <button class="lb-draw-btn"    id="drawModeRect" onclick="event.stopPropagation();lbSetMode('rect',this)" title="Rechteck">▭</button>
@@ -2412,7 +2421,7 @@ async function _embedExifInDrive(driveId,caption){
       <button class="lb-text-edit-btn" onclick="event.stopPropagation();lbStartDraw()" style="margin-left:4px">✏️ Malen</button>
     </div>
     <div class="lb-text-edit-form">
-      <textarea id="lbTextInput" placeholder="Kurze Beschreibung zum Foto…" rows="2"></textarea>
+      <textarea id="lbTextInput" placeholder="Kurze Beschreibung zum Foto…" rows="2" autocomplete="off"></textarea>
       <div style="display:flex;gap:6px;justify-content:flex-end">
         <button class="cancel" onclick="event.stopPropagation();lbCancelCaption()">Abbrechen</button>
         <button onclick="event.stopPropagation();lbSaveCaption()">💾 Speichern</button>
@@ -3091,6 +3100,7 @@ function _openAttachGalleryMob(startIdx){
     nextBtn2.style.display=list.length>1?'':'none';
     content.querySelectorAll(':scope > *:not(button)').forEach(el=>el.remove());
 
+    const _aid=a.driveId||a.fileId||'';
     const isPdf=a.type==='application/pdf'||(a.name||'').toLowerCase().endsWith('.pdf');
     if(isPdf&&a.data){
       try{
@@ -3103,9 +3113,14 @@ function _openAttachGalleryMob(startIdx){
         fr.src=curBlobUrl;fr.style.cssText='width:100vw;height:calc(100vh - 62px);border:none;background:#fff;';
         content.appendChild(fr);
       }catch(e){const d=document.createElement('div');d.style.cssText='color:#f88;';d.textContent='\u26A0 '+e.message;content.appendChild(d);}
+    } else if(isPdf&&_aid){
+      const fr=document.createElement('iframe');
+      fr.src='https://drive.google.com/file/d/'+_aid+'/preview';
+      fr.style.cssText='width:100vw;height:calc(100vh - 62px);border:none;background:#fff;';
+      content.appendChild(fr);
     } else if(a.type&&a.type.startsWith('image/')){
       const img=document.createElement('img');
-      img.src=a.data||'';
+      img.src=a.data||(_aid?'https://drive.google.com/thumbnail?id='+_aid+'&sz=w1600':'');
       img.style.cssText='max-width:100vw;max-height:calc(100vh - 62px);object-fit:contain;';
       content.appendChild(img);
     } else {
@@ -3224,7 +3239,9 @@ async function _mobOpenEmailPreview(idx){
 function _mobDownloadEml(idx){
   const t=currentTask();const origs=(t&&t.emailOriginals)||[];const item=origs[idx];
   if(!item)return;
-  if(item.url){window.open(item.url,'_blank');}else{toast('Keine Download-URL verfügbar','error');}
+  if(item.url){window.open(item.url,'_blank');}
+  else if(item.fileId){window.open('https://drive.google.com/file/d/'+item.fileId+'/view','_blank');}
+  else{toast('Keine Download-URL verfügbar','error');}
 }
 function _mobOpenEmailFolder(idx){
   const t=currentTask();
@@ -3248,14 +3265,4 @@ function _openAttachThumbnailGridMob(){
   const blobUrls=[];
   const ov=document.createElement('div');
   ov.id=GID;
-  ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9500;display:flex;flex-direction:column;overflow:hidden;';
-  function _closeGrid(){blobUrls.forEach(u=>URL.revokeObjectURL(u));ov.remove();}
-  // Header
-  const hdr=document.createElement('div');
-  hdr.style.cssText='display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;';
-  const titleEl=document.createElement('span');
-  titleEl.style.cssText='flex:1;font-size:15px;font-weight:700;color:var(--text);';
-  titleEl.textContent='📎 Dateianhänge ('+list.length+')';
-  const closeBtn=document.createElement('button');
-  closeBtn.textContent='✕';
-  closeBtn.style.cssText='background:rgba(128,128,128,.2);border:none;color:
+  ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9500;display:flex;flex-dir
