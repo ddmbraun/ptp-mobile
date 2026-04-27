@@ -734,7 +734,8 @@ async function saveFile(){
                     mergedTask.ausserhausTermine=_mergeListByKey(rt.ausserhausTermine,localTask.ausserhausTermine,e=>((e.date||'')+'|'+(e.von||'')+'|'+(e.bis||'')+'|'+(e.beschreibung||'')));
                     mergedTask.fotos=_mergeListByKey(rt.fotos,localTask.fotos,f=>(f.id||f.driveId||f.path||f.name||''));
                     mergedTask.attachments=_mergeListByKey(rt.attachments,localTask.attachments,f=>((f.name||'')+'|'+(f.size||0)));
-                    mergedTask.pruefberichte=_mergeListByKey(rt.pruefberichte,localTask.pruefberichte,b=>(b.createdAt||b.titel||''));
+                    mergedTask.timeEntries=_mergeListByKey(rt.timeEntries,localTask.timeEntries,e=>String(e.start||''));
+                    mergedTask.pruefberichte=_mergeListByKey(rt.pruefberichte,localTask.pruefberichte,b=>(b.id||b.createdAt||((b.titel||'')+'|'+(b.datum||''))));
                     remoteVisible[bn][idx]=mergedTask;
                     placed=true;break;
                   }
