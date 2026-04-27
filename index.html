@@ -214,8 +214,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
     <input type="text" id="searchInput" placeholder="🔍 Suche Titel, Kostenstelle, Adresse…" oninput="renderList();document.getElementById('searchClear').style.display=this.value?'block':'none'" autocomplete="off" autocorrect="off" spellcheck="false">
     <button class="search-clear" id="searchClear" onclick="document.getElementById('searchInput').value='';this.style.display='none';renderList()">✕</button>
   </div>
+  <div style="display:flex;gap:6px;padding:6px 12px 0;flex-shrink:0;">
+    <button id="tabListeBtn" onclick="switchMobView('liste')" style="flex:1;padding:8px 0;border-radius:8px;border:1px solid var(--border);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">☰ Liste</button>
+    <button id="tabHeuteBtn" onclick="switchMobView('heute')" style="flex:1;padding:8px 0;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;">📅 Heute</button>
+  </div>
   <div class="task-list" id="taskList"></div>
-  <button class="fab" onclick="newTask()">+</button>
+  <div id="heuteList" style="display:none;flex:1;overflow-y:auto;padding:10px 12px;"></div>
+  <button class="fab" id="fabBtn" onclick="newTask()">+</button>
 </div>
 
 <!-- ══ DETAIL-SCREEN ══ -->
@@ -521,6 +526,94 @@ function showList(){
   document.getElementById('listScreen').classList.remove('hidden');
   document.getElementById('detailScreen').classList.add('hidden');
   document.getElementById('settingsScreen').classList.add('hidden');
+}
+
+let _mobView='liste';
+function switchMobView(view){
+  _mobView=view;
+  const isHeute=(view==='heute');
+  document.getElementById('taskList').style.display=isHeute?'none':'';
+  document.getElementById('heuteList').style.display=isHeute?'block':'none';
+  document.getElementById('fabBtn').style.display=isHeute?'none':'';
+  const btnL=document.getElementById('tabListeBtn');
+  const btnH=document.getElementById('tabHeuteBtn');
+  if(btnL){btnL.style.background=isHeute?'var(--bg3)':'var(--accent)';btnL.style.color=isHeute?'var(--text2)':'#fff';}
+  if(btnH){btnH.style.background=isHeute?'var(--accent)':'var(--bg3)';btnH.style.color=isHeute?'#fff':'var(--text2)';}
+  if(isHeute)renderHeuteMobil();
+}
+function renderHeuteMobil(){
+  const el=document.getElementById('heuteList');if(!el)return;
+  const today=new Date().toISOString().split('T')[0];
+  const in3=new Date(Date.now()+3*864e5).toISOString().split('T')[0];
+  const ueberfaellig=[],heuteFaellig=[],bald=[];
+  Object.keys(boards).forEach(function(bName){
+    if(bName.startsWith('_'))return;
+    (boards[bName]||[]).forEach(function(t){
+      if(!t.due)return;
+      if(t.due<today)ueberfaellig.push({t:t,board:bName});
+      else if(t.due===today)heuteFaellig.push({t:t,board:bName});
+      else if(t.due<=in3)bald.push({t:t,board:bName});
+    });
+  });
+  ueberfaellig.sort(function(a,b){return a.t.due<b.t.due?-1:1;});
+  bald.sort(function(a,b){return a.t.due<b.t.due?-1:1;});
+  function diffDays(due){return Math.round((new Date(today)-new Date(due))/(864e5));}
+  function fmtDue(due){var p=due.split('-');return p[2]+'.'+p[1]+'.'+p[0].substr(2);}
+  function anrufBtn(t){
+    var k=(t.kontakte||[]).find(function(c){return c.anrufKontakt&&c.tel;});
+    if(!k)k=(t.kontakte||[]).find(function(c){return c.tel;});
+    if(!k||!k.tel)return'';
+    var label=k.name?esc(k.name)+' · '+esc(k.tel):esc(k.tel);
+    return'<a href="tel:'+encodeURIComponent(k.tel)+'" onclick="event.stopPropagation()" '
+      +'style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;'
+      +'background:#1a7f37;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;min-height:44px;">'
+      +'📞 '+label+'</a>';
+  }
+  function aktBadge(t){
+    if(t.aktivitaet==='anruf')return'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:#e8f0fe;color:#1a56c4;font-weight:600;border:1px solid #b3c8fa;">📞 Anruf</span>';
+    if(t.aktivitaet==='besichtigung')return'<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:#e6f4ea;color:#1e7e34;font-weight:600;border:1px solid #a8d5b5;">📍 Besichtigung</span>';
+    return'';
+  }
+  function row(item,dringlichkeit){
+    var t=item.t;
+    var dotColor=dringlichkeit==='overdue'?'var(--red)':dringlichkeit==='heute'?'var(--orange)':'var(--green)';
+    var extra='';
+    if(dringlichkeit==='overdue'){var d=diffDays(t.due);extra='<span style="font-size:11px;color:var(--red);font-weight:600;">'+d+(d===1?' Tag':' Tage')+' überfällig</span>';}
+    else if(dringlichkeit==='bald'){extra='<span style="font-size:11px;color:var(--text2);">'+fmtDue(t.due)+'</span>';}
+    return'<div onclick="openDetail(\''+escAttr(t.id)+'\')" '
+      +'style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="width:9px;height:9px;border-radius:50%;background:'+dotColor+';flex-shrink:0;display:inline-block;"></span>'
+      +'<span style="flex:1;font-size:14px;font-weight:600;color:var(--text);">'+esc(t.title)+'</span>'
+      +aktBadge(t)
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center;">'
+      +'<span style="font-size:11px;background:var(--bg4);color:var(--text2);padding:2px 8px;border-radius:5px;">'+esc(item.board)+'</span>'
+      +(t.owner?'<span style="font-size:11px;color:var(--text2);">'+esc(t.owner)+'</span>':'')
+      +extra
+      +'</div>'
+      +(t.aktivitaet==='anruf'?anrufBtn(t):'')
+      +'</div>';
+  }
+  function section(label,color,items,dringlichkeit){
+    if(!items.length)return'';
+    return'<div style="margin-bottom:1rem;">'
+      +'<div style="font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px;">'
+      +label+' <span style="font-size:11px;padding:1px 7px;border-radius:10px;background:'+color+'22;color:'+color+';font-weight:600;">'+items.length+'</span></div>'
+      +items.map(function(i){return row(i,dringlichkeit);}).join('')
+      +'</div>';
+  }
+  var d=new Date();
+  var ds=d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});
+  var html='<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:14px;">📅 '+ds+'</div>';
+  if(!ueberfaellig.length&&!heuteFaellig.length&&!bald.length){
+    html+='<div style="color:var(--text2);font-size:14px;text-align:center;padding:40px 0;">Keine fälligen Aufgaben 🎉</div>';
+  }else{
+    html+=section('Überfällig','var(--red)',ueberfaellig,'overdue');
+    html+=section('Heute fällig','var(--orange)',heuteFaellig,'heute');
+    html+=section('Nächste 3 Tage','var(--green)',bald,'bald');
+  }
+  el.innerHTML=html;
 }
 
 // ── TOKEN-KEY MIGRATION (von altem ptpm_token auf ptp_gdrive_token_v1) ──
@@ -867,6 +960,42 @@ const PRUEF_VORLAGEN={
     ]
   }
 };
+
+/* Ausklappmenü für neue Prüfformulare/Protokolle
+   Neue Protokolle einfach als weiteres Objekt im items-Array ergänzen */
+function _pruefMenuShow(e){
+  e.stopPropagation();
+  const old=document.getElementById('_pruefMenuPop');
+  if(old){old.remove();return;}
+  const pop=document.createElement('div');
+  pop.id='_pruefMenuPop';
+  pop.style.cssText='position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border);'
+    +'border-radius:10px;padding:8px;min-width:210px;box-shadow:0 4px 20px rgba(0,0,0,.4);';
+  const r=e.currentTarget.getBoundingClientRect();
+  pop.style.top=(r.bottom+6)+'px';
+  pop.style.right=(window.innerWidth-r.right)+'px';
+  const items=[
+    {label:'+ Prüfbericht',       fn:function(){_openPruefformular();},         bg:'rgba(255,255,255,.12)',border:'rgba(255,255,255,.35)',color:'inherit'},
+    {label:'🏠 Wartungsprotokoll',fn:function(){_openWartungsprotokollMobil();},bg:'#1a5c3a',             border:'#1a5c3a',             color:'#fff'},
+  ];
+  items.forEach(function(it,i){
+    const btn=document.createElement('button');
+    btn.textContent=it.label;
+    btn.style.cssText='display:block;width:100%;text-align:left;padding:11px 14px;border-radius:6px;'
+      +'border:1px solid '+it.border+';background:'+it.bg+';color:'+it.color+';'
+      +'cursor:pointer;font-size:13px;font-weight:600;'+(i<items.length-1?'margin-bottom:6px;':'');
+    btn.onclick=function(ev){ev.stopPropagation();pop.remove();it.fn();};
+    pop.appendChild(btn);
+  });
+  document.body.appendChild(pop);
+  setTimeout(function(){
+    document.addEventListener('click',function h(){
+      var p=document.getElementById('_pruefMenuPop');
+      if(p)p.remove();
+      document.removeEventListener('click',h);
+    });
+  },50);
+}
 
 /* Prüfformular öffnen (idx = vorhandenen Bericht laden, sonst neu) */
 function _openPruefformular(existingIdx){
@@ -1982,6 +2111,11 @@ function renderDetail(t){
             +['grün','orange','rot'].map(a=>'<option value="'+a+'"'+(a===(t.ampel||'grün')?' selected':'')+'>'+({'grün':'🟢','orange':'🟠','rot':'🔴'}[a])+'</option>').join('')
           +'</select></div></div>')
       +'<div class="field"><label>Ausführungsdatum</label><input type="date" value="'+escAttr(t.ausführungsdatum||'')+'" onchange="updateField(\'ausführungsdatum\',this.value)" autocomplete="off"></div>'
+      +'<div class="field"><label>Aktivität</label><select onchange="updateField(\'aktivitaet\',this.value)">'
+        +'<option value=""'+(!(t.aktivitaet)?' selected':'')+'>— keine —</option>'
+        +'<option value="anruf"'+(t.aktivitaet==='anruf'?' selected':'')+'>📞 Telefonanruf</option>'
+        +'<option value="besichtigung"'+(t.aktivitaet==='besichtigung'?' selected':'')+'>📍 Besichtigungstermin</option>'
+      +'</select></div>'
       +(!isNotiz?'<div class="field"><label>Adresse</label><div class="field-row" style="gap:6px"><input type="text" value="'+escAttr(t.adresse||'')+'" placeholder="Straße, PLZ Ort" oninput="updateField(\'adresse\',this.value);updateNavBtn()" autocomplete="off"><a id="navBtn" class="nav-link'+(t.adresse?'':' disabled')+'" href="'+(t.adresse?'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(t.adresse):'#')+'" target="_blank">🗺️</a></div></div>':'')
       +(!isNotiz?'<div class="field"><label>Hausverwaltung</label><input type="text" value="'+escAttr(t.hausverwaltung||'')+'" oninput="updateField(\'hausverwaltung\',this.value)" autocomplete="off"></div>':'')
       +'<div class="field"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px"><label style="margin:0">'+(isNotiz?'Beschreibung':'Schaden / Beschreibung')+'</label><button type="button" class="inline-btn" style="padding:4px 10px;font-size:11px" onclick="toggleExpandTA(this.parentElement.nextElementSibling)">🔍 vergrößern</button></div><textarea id="mSchTA" class="expandable-ta" oninput="updateField(\'schadensbild\',this.value)" autocomplete="off">'+esc(t.schadensbild||'')+'</textarea></div>'
@@ -2074,10 +2208,7 @@ function renderDetail(t){
       return '<div class="sect'+oc('Pruefformulare')+'" data-sect="Pruefformulare">'
         +'<div class="sect-head" onclick="toggleMSect(this.parentElement)" style="display:flex;align-items:center;justify-content:space-between;">'
         +'<span>📋 Prüfformulare'+(cnt?' ('+cnt+')':'')+'</span>'
-        +'<span style="display:flex;gap:5px;margin-right:22px;">'
-        +'<button onclick="event.stopPropagation();_openPruefformular()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;cursor:pointer;font-weight:600;">+ Prüfbericht</button>'
-        +'<button onclick="event.stopPropagation();_openWartungsprotokollMobil()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #1a5c3a;background:#1a5c3a;color:#fff;cursor:pointer;font-weight:600;">🏠 WP</button>'
-        +'</span>'
+        +'<button onclick="event.stopPropagation();_pruefMenuShow(event)" style="font-size:20px;line-height:1;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:inherit;cursor:pointer;font-weight:400;margin-right:22px;" title="Neues Protokoll anlegen">+</button>'
         +'</div>'
         +'<div class="sect-body">'
         +(cnt?berichte.map((b,bi)=>{
