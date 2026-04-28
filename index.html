@@ -462,12 +462,49 @@ async function afterLogin(){
   await findOrPickFile();
 }
 function tokenValid(){return gdriveToken&&Date.now()<gdriveTokenExpires;}
+function _showMobDriveWarnBanner(){
+  if(document.getElementById('_mobDriveWarnBanner'))return;
+  const b=document.createElement('div');
+  b.id='_mobDriveWarnBanner';
+  b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#e67e22;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 14px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+  b.innerHTML='<span>⚠ Drive-Verbindung läuft ab</span>'
+    +'<button onclick="_mobDriveRenew()" style="background:#fff;color:#e67e22;border:none;border-radius:6px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer;">🔑 Erneuern</button>';
+  document.body.prepend(b);
+}
+function _hideMobDriveWarnBanner(){
+  const b=document.getElementById('_mobDriveWarnBanner');
+  if(b)b.remove();
+}
+function _mobDriveRenew(){
+  _hideMobDriveWarnBanner();
+  initTokenClient();
+  if(!gdriveTokenClient){toast('Google-Dienst lädt noch – bitte Seite neu laden','error');return;}
+  const prev=gdriveTokenClient.callback;
+  gdriveTokenClient.callback=(r)=>{
+    gdriveTokenClient.callback=prev;
+    if(r&&r.access_token){
+      gdriveToken=r.access_token;
+      gdriveTokenExpires=Date.now()+(Number(r.expires_in||3600)-60)*1000;
+      try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){}
+      _scheduleGdriveRefresh(Number(r.expires_in||3600));
+      toast('✓ Drive-Verbindung erneuert','success');
+    }else{
+      toast('Anmeldung fehlgeschlagen – bitte erneut versuchen','error');
+      _showMobDriveWarnBanner();
+    }
+  };
+  try{gdriveTokenClient.requestAccessToken({});}catch(e){toast('Fehler: '+e.message,'error');}
+}
 function _scheduleGdriveRefresh(expiresIn){
   clearTimeout(_gdriveRefreshTimer);
-  const delay=Math.max(10000,(expiresIn-300))*1000;
+  // 10 Minuten vor Ablauf warnen (statt 5 Min), damit Nutzer Zeit hat zu reagieren
+  const delay=Math.max(10000,(expiresIn-600))*1000;
   _gdriveRefreshTimer=setTimeout(()=>{
     initTokenClient();
     if(!gdriveTokenClient)return;
+    // Banner sofort zeigen – nicht erst nach fehlgeschlagenem Silent-Refresh
+    _showMobDriveWarnBanner();
+    toast('⚠ Drive-Verbindung läuft ab – bitte oben erneuern','error');
     try{
       const prev=gdriveTokenClient.callback;
       gdriveTokenClient.callback=(r)=>{
@@ -477,7 +514,9 @@ function _scheduleGdriveRefresh(expiresIn){
           gdriveTokenExpires=Date.now()+(Number(r.expires_in||3600)-60)*1000;
           try{localStorage.setItem(TOKEN_KEY,JSON.stringify({token:gdriveToken,exp:gdriveTokenExpires}));}catch(e){console.warn('[PTP-Mobile] Token speichern in Refresh:',e);}
           _scheduleGdriveRefresh(Number(r.expires_in||3600));
+          _hideMobDriveWarnBanner(); // Stiller Refresh hat geklappt → Banner weg
         }
+        // Falls stiller Refresh fehlschlägt: Banner bleibt, Nutzer muss klicken
       };
       gdriveTokenClient.requestAccessToken({prompt:'none'});
     }catch(e){console.warn('[PTP-Mobile] Token-Refresh:',e);}
@@ -3343,6 +3382,11 @@ function lbStartDraw(){
   _drawErasing=false;
   canvas.classList.add('active');
   document.getElementById('lbDrawBar').classList.add('visible');
+  // Erst alte Listener entfernen, sonst stapeln sich bei mehrfachem Öffnen die Handler
+  canvas.removeEventListener('pointerdown',_onDrawDown);
+  canvas.removeEventListener('pointermove',_onDrawMove);
+  canvas.removeEventListener('pointerup',_onDrawUp);
+  canvas.removeEventListener('pointercancel',_onDrawUp);
   canvas.addEventListener('pointerdown',_onDrawDown);
   canvas.addEventListener('pointermove',_onDrawMove);
   canvas.addEventListener('pointerup',_onDrawUp);
@@ -3428,7 +3472,11 @@ async function lbSaveDraw(){
   if(!img||!drawCanvas)return;
   const t=currentTask();
   if(!t||_lbFotoIdx<0||!t.fotos||!t.fotos[_lbFotoIdx]){toast('Kein Foto gewählt','error');lbDiscardDraw();return;}
-  const f=t.fotos[_lbFotoIdx];
+  // Index VOR dem ersten await sichern – _lbFotoIdx kann sich während des
+  // asynchronen Uploads ändern (z.B. Lightbox geschlossen → -1), was sonst
+  // t.fotos[-1]=undefined liefert und einen Duplikat-Eintrag per push() erzeugt.
+  const savedIdx=_lbFotoIdx;
+  const f=t.fotos[savedIdx];
   // Bild-Position im Fenster ermitteln (für Koordinaten-Mapping)
   const imgRect=img.getBoundingClientRect();
   // Merge-Canvas in Originalauflösung
@@ -3464,13 +3512,15 @@ async function lbSaveDraw(){
     if(!t.fotos)t.fotos=[];
     const blobUrl=URL.createObjectURL(blob);
     _fotoBlobCache.set(meta.id,blobUrl);
-    const origFoto=t.fotos[_lbFotoIdx];
+    // savedIdx verwenden – nicht _lbFotoIdx (könnte sich geändert haben)
+    const origFoto=t.fotos[savedIdx];
     if(origFoto){
       // Vorherige Zeichnung überschreiben statt neuen Eintrag anlegen
       origFoto.editedDriveId=meta.id;
       origFoto.editedName=meta.name||copyName;
     } else {
-      t.fotos.push({driveId:meta.id,name:copyName,mimeType:'image/jpeg',caption:'Zeichnung'});
+      // Fallback: Foto existiert nicht mehr (z.B. zwischenzeitlich gelöscht)
+      console.warn('[PTP-Mobile] lbSaveDraw: origFoto nicht mehr gefunden bei Index',savedIdx);
     }
     forceSave();
     _mOpenSections['Fotos']=true;
